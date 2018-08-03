@@ -119,6 +119,8 @@
 #include "ViewProviderTextDocument.h"
 #include "ViewProviderGroupExtension.h"
 
+#include "DlgConfigurationWizardImp.h"
+
 #include "Language/Translator.h"
 #include "TaskView/TaskView.h"
 #include "TaskView/TaskDialogPython.h"
@@ -1836,6 +1838,11 @@ void Application::runApplication(void)
     // stop splash screen and set immediately the active window that may be of interest
     // for scripts using Python binding for Qt
     mw.stopSplasher();
+
+    // shows the configuration wizard
+    Gui::Dialog::DlgConfigurationWizardImp dlgConfigWizard(&mw);
+    dlgConfigWizard.exec();
+
     mainApp.setActiveWindow(&mw);
 
     // Activate the correct workbench

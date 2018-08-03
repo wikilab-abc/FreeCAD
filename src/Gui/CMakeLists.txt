@@ -205,6 +205,7 @@ set(Gui_MOC_HDRS
     DlgActivateWindowImp.h
     DlgUnitsCalculatorImp.h
     DlgCommandsImp.h
+    DlgConfigurationWizardImp.h
     DlgCustomizeImp.h
     DlgCustomizeSpaceball.h
     DlgCustomizeSpNavSettings.h
@@ -326,6 +327,7 @@ SET(Gui_UIC_SRCS
     DlgAuthorization.ui
     DlgChooseIcon.ui
     DlgCommands.ui
+    DlgConfigurationWizard.ui
     DlgCustomizeSpNavSettings.ui
     DlgDisplayProperties.ui
     DlgEditor.ui
@@ -1085,6 +1087,7 @@ SET(FreeCADGui_CPP_SRCS
     ApplicationPy.cpp
     AutoSaver.cpp
     BitmapFactory.cpp
+    DlgConfigurationWizardImp.cpp
     Document.cpp
     DocumentModel.cpp
     DocumentPyImp.cpp
@@ -1111,6 +1114,7 @@ SET(FreeCADGui_SRCS
     Application.h
     AutoSaver.h
     BitmapFactory.h
+    DlgConfigurationWizardImp.h
     Document.h
     DocumentModel.h
     DocumentObserver.h
