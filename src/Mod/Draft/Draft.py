@@ -285,7 +285,7 @@ def dimSymbol(symbol=None,invert=False):
         return coin.SoSphere()
     elif symbol == 1:
         marker = coin.SoMarkerSet()
-        marker.markerIndex = coin.SoMarkerSet.CIRCLE_LINE_9_9
+        marker.markerIndex = FreeCADGui.getMarkerIndex("circle", 9)
         return marker
     elif symbol == 2:
         marker = coin.SoSeparator()
@@ -6126,7 +6126,13 @@ class _PointArray(_DraftObject):
         while getType(opl) == 'Clone':
             opl = opl.Objects[0]
         if hasattr(opl, 'Geometry'):
-            pls = opl.Geometry
+            place = opl.Placement
+            for pts in opl.Geometry:
+                if hasattr(pts, 'X') and hasattr(pts, 'Y') and hasattr(pts, 'Z'):
+                    pn = pts.copy()
+                    pn.translate(place.Base)
+                    pn.rotate(place)
+                    pls.append(pn)
         elif hasattr(opl, 'Links'):
             pls = opl.Links
         elif hasattr(opl, 'Components'):
@@ -6137,7 +6143,7 @@ class _PointArray(_DraftObject):
         if hasattr(obj.Base, 'Shape'):
             for pts in pls:
                 #print pts # inspect the objects
-                if hasattr(pts, 'X') and hasattr(pts, 'Y') and hasattr(pts, 'Y'):
+                if hasattr(pts, 'X') and hasattr(pts, 'Y') and hasattr(pts, 'Z'):
         	        nshape = obj.Base.Shape.copy()
         	        if hasattr(pts, 'Placement'):
         	            place = pts.Placement
@@ -6147,7 +6153,11 @@ class _PointArray(_DraftObject):
         	        i += 1
         	        base.append(nshape)
         obj.Count = i
-        obj.Shape = Part.makeCompound(base)
+        if i > 0: 
+            obj.Shape = Part.makeCompound(base)
+        else:
+            FreeCAD.Console.PrintError(translate("draft","No point found\n"))
+            obj.Shape = obj.Base.Shape.copy()
 
 class _Point(_DraftObject):
     "The Draft Point object"
@@ -6730,7 +6740,7 @@ class ViewProviderWorkingPlaneProxy:
         vobj.ArrowSize = 5
         vobj.Transparency = 70
         vobj.LineWidth = 1
-        vobj.LineColor = (0.0,0.25,0.25,1.0)
+        vobj.LineColor = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Arch").GetUnsigned("ColorHelpers",674321151)
         vobj.Proxy = self
 
     def getIcon(self):

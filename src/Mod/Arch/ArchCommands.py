@@ -94,6 +94,8 @@ def getDefaultColor(objectType):
         c = p.GetUnsigned("RebarColor",3111475967)
     elif objectType == "Panel":
         c = p.GetUnsigned("PanelColor",3416289279)
+    elif objectType == "Helpers":
+        c = p.GetUnsigned("ColorHelpers",674321151)
     elif objectType == "Construction":
         c = Draft.getParam("constructioncolor",746455039)
         transparency = 0.80
@@ -226,7 +228,7 @@ def makeComponent(baseobj=None,name="Component",delete=False):
     if not FreeCAD.ActiveDocument:
         FreeCAD.Console.PrintError("No active document. Aborting\n")
         return
-    obj = FreeCAD.ActiveDocument.addObject("Part::FeaturePython",name)
+    obj = FreeCAD.ActiveDocument.addObject("Part::FeaturePython","Component")
     obj.Label = translate("Arch",name)
     ArchComponent.Component(obj)
     if FreeCAD.GuiUp:

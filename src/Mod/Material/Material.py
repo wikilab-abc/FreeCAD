@@ -97,7 +97,7 @@ def exportFCMat(fileName, matDict):
 
 def getMaterialAttributeStructure(withSpaces=None):
     # material properties
-    # see the following resources in the FreeCAD wiki for more informations about the material specific properties:
+    # see the following resources in the FreeCAD wiki for more information about the material specific properties:
     # https://www.freecadweb.org/wiki/Material_data_model
     # https://www.freecadweb.org/wiki/Material
     materialPropertyGroups = (
@@ -121,7 +121,7 @@ def getMaterialAttributeStructure(withSpaces=None):
             "UltimateTensileStrength",  # https://en.wikipedia.org/wiki/Ultimate_tensile_strength
             "CompressiveStrength",  # https://en.wikipedia.org/wiki/Compressive_strength
             "YieldStrength",  # https://en.wikipedia.org/wiki/Yield_Strength
-            "Elasticity",
+            "UltimateStrain",  # https://en.wikipedia.org/wiki/Ultimate_tensile_strength
             "FractureToughness",  # https://en.wikipedia.org/wiki/Fracture_toughness
             "AngleOfFriction"  # https://en.wikipedia.org/wiki/Friction#Angle_of_friction and https://en.m.wikipedia.org/wiki/Mohr%E2%80%93Coulomb_theory
         )),
