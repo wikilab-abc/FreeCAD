@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (c) 2016 Werner Mayer <wmayer[at]users.sourceforge.net>     *
+ *   Copyright (c) 2018 Werner Mayer <wmayer[at]users.sourceforge.net>     *
  *                                                                         *
  *   This file is part of the FreeCAD CAx development system.              *
  *                                                                         *
@@ -21,39 +21,40 @@
  ***************************************************************************/
 
 
-#ifndef MESHGUI_DLG_EVALUATE_SETTINGS_H
-#define MESHGUI_DLG_EVALUATE_SETTINGS_H
+#ifndef PARTGUI_BOXSELECTION_H
+#define PARTGUI_BOXSELECTION_H
 
-#include <QDialog>
+class SoEventCallback;
+class TopoDS_Shape;
 
-namespace MeshGui {
+namespace Base {
+class Polygon2d;
+}
 
-class Ui_DlgEvaluateSettings;
+namespace Gui {
+class View3DInventorViewer;
+class ViewVolumeProjection;
+}
 
-/**
- * \author Werner Mayer
- */
-class DlgEvaluateSettings : public QDialog
+namespace PartGui {
+
+class BoxSelection
 {
-    Q_OBJECT
-
 public:
-    DlgEvaluateSettings(QWidget* parent = 0, Qt::WindowFlags fl = 0);
-    ~DlgEvaluateSettings();
+    BoxSelection();
+    ~BoxSelection();
 
-    void setNonmanifoldPointsChecked(bool);
-    bool isNonmanifoldPointsChecked() const;
-
-    void setFoldsChecked(bool);
-    bool isFoldsChecked() const;
-
-    void setDegeneratedFacetsChecked(bool);
-    bool isDegeneratedFacetsChecked() const;
+    void start();
 
 private:
-    Ui_DlgEvaluateSettings* ui;
+    class FaceSelectionGate;
+    void addFacesToSelection(const char* doc, const char* obj,
+                             const Gui::ViewVolumeProjection& proj,
+                             const Base::Polygon2d& polygon,
+                             const TopoDS_Shape& shape);
+    static void selectionCallback(void * ud, SoEventCallback * cb);
 };
 
-} // namespace MeshGui
+} //namespace PartGui
 
-#endif // MESHGUI_DLG_EVALUATE_SETTINGS_H
+#endif // PARTGUI_BOXSELECTION_H
