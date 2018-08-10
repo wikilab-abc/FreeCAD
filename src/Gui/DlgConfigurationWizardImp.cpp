@@ -8,6 +8,10 @@ DlgConfigurationWizardImp::DlgConfigurationWizardImp(QWidget* parent, Qt::Window
     : QDialog(parent, fl), ui(new Ui_DlgConfigurationWizard)
 {
     ui->setupUi(this);
+    connect(ui->buttonBox,
+            SIGNAL(rejected()),
+            this,
+            SLOT(close()));
 }
 
 DlgConfigurationWizardImp::~DlgConfigurationWizardImp()
