@@ -56,6 +56,10 @@ DlgConfigurationWizardImp::DlgConfigurationWizardImp(QWidget* parent, Qt::Window
 
 
 
+    connect(ui->buttonBox,
+            SIGNAL(rejected()),
+            this,
+            SLOT(close()));
 }
 
 DlgConfigurationWizardImp::~DlgConfigurationWizardImp()
