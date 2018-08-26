@@ -553,6 +553,11 @@ View3DInventorViewer::~View3DInventorViewer()
     setSceneGraph(0);
     this->pEventCallback->unref();
     this->pEventCallback = 0;
+    // Note: It can happen that there is still someone who references
+    // the root node but isn't destroyed when closing this viewer so
+    // that it prevents all children from being deleted. To reduce this
+    // likelihood we explicitly remove all child nodes now.
+    this->pcViewProviderRoot->removeAllChildren();
     this->pcViewProviderRoot->unref();
     this->pcViewProviderRoot = 0;
     this->backlight->unref();
@@ -573,6 +578,14 @@ View3DInventorViewer::~View3DInventorViewer()
         static_cast<View3DInventorViewerPy*>(_viewerPy)->_viewer = 0;
         Py_DECREF(_viewerPy);
     }
+
+    // In the init() function we have overridden the default SoGLRenderAction with our
+    // own instance of SoBoxSelectionRenderAction and SoRenderManager destroyed the default.
+    // But it does this only once so that now we have to explicitly destroy our instance in
+    // order to free the memory.
+    SoGLRenderAction* glAction = this->getSoRenderManager()->getGLRenderAction();
+    this->getSoRenderManager()->setGLRenderAction(nullptr);
+    delete glAction;
 }
 
 void View3DInventorViewer::aboutToDestroyGLContext()
