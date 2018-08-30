@@ -107,7 +107,7 @@
             <widget class="QComboBox" name="Languages"/>
            </item>
            <item row="1" column="1">
-            <widget class="QComboBox" name="comboBox"/>
+            <widget class="QComboBox" name="UnitType"/>
            </item>
            <item row="0" column="0">
             <widget class="QLabel" name="label_3">

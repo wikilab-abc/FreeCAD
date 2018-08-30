@@ -53,6 +53,12 @@ DlgConfigurationWizardImp::DlgConfigurationWizardImp(QWidget* parent, Qt::Window
         }
     }
 
+    // add unit type
+    ui->UnitType->addItem(QString::fromLatin1("Metric Units"));
+    ui->UnitType->addItem(QString::fromLatin1("Imperial Units"));
+
+    
+
 
 
 
