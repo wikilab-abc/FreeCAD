@@ -16,6 +16,12 @@ public:
     DlgConfigurationWizardImp(QWidget* parent = 0, Qt::WindowFlags fl = 0);
     ~DlgConfigurationWizardImp();
 
+protected:
+    void changeEvent(QEvent *e);
+
+private Q_SLOTS:
+    void configure();
+    
 private:
     Ui_DlgConfigurationWizard* ui;
 };
