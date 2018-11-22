@@ -30,6 +30,7 @@
 #include <vector>
 #include <list>
 #include <map>
+#include <boost/signals2.hpp>
 #include <CXX/Objects.hxx>
 
 #include <Base/Observer.h>
@@ -144,8 +145,9 @@ private:
     void _onSelectionChanged(const SelectionChanges& msg);
 
 private:
-    typedef boost::signals::connection Connection;
+    typedef boost::signals2::connection Connection;
     Connection connectSelection;
+    bool blockSelection;
 };
 
 /**
@@ -222,6 +224,8 @@ public:
     bool addSelection(const char* pDocName, const char* pObjectName=0, const char* pSubName=0, float x=0, float y=0, float z=0);
     /// Add to selection with several sub-elements
     bool addSelection(const char* pDocName, const char* pObjectName, const std::vector<std::string>& pSubNames);
+    /// Add to selection
+    bool addSelection(const SelectionObject&);
     /// Remove from selection (for internal use)
     void rmvSelection(const char* pDocName, const char* pObjectName=0, const char* pSubName=0);
     /// Set the selection for a document
@@ -291,7 +295,7 @@ public:
     };
 
     /// signal on new object
-    boost::signal<void (const SelectionChanges& msg)> signalSelectionChanged;
+    boost::signals2::signal<void (const SelectionChanges& msg)> signalSelectionChanged;
 
     /** Returns a vector of selection objects
      * If no document name is given the objects of the active are returned.

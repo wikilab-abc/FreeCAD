@@ -25,7 +25,9 @@
 
 #ifndef _PreComp_
 # include <QMessageBox>
+# include <QAction>
 # include <QApplication>
+# include <QMenu>
 #include <Inventor/nodes/SoSwitch.h>
 #endif
 
@@ -89,6 +91,12 @@ bool ViewProvider::doubleClicked(void)
     return true;
 }
 
+void ViewProvider::setupContextMenu(QMenu* menu, QObject* receiver, const char* member)
+{
+    QAction* act = menu->addAction(QObject::tr("Set colors..."), receiver, member);
+    act->setData(QVariant((int)ViewProvider::Color));
+}
+
 bool ViewProvider::setEdit(int ModNum)
 {
     if (ModNum == ViewProvider::Default ) {
@@ -125,7 +133,7 @@ bool ViewProvider::setEdit(int ModNum)
         if (!featureDlg) {
             featureDlg = this->getEditDialog();
             if (!featureDlg) { // Shouldn't generally happen
-                throw Base::Exception ("Failed to create new edit dialog.");
+                throw Base::RuntimeError ("Failed to create new edit dialog.");
             }
         }
 
@@ -138,7 +146,7 @@ bool ViewProvider::setEdit(int ModNum)
 
 
 TaskDlgFeatureParameters *ViewProvider::getEditDialog() {
-    throw Base::Exception("getEditDialog() not implemented");
+    throw Base::NotImplementedError("getEditDialog() not implemented");
 }
 
 

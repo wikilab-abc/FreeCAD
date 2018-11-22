@@ -34,7 +34,7 @@ FreeCADGui.updateLocale()
 iconprovider = QtGui.QFileIconProvider()
 iconbank = {} # to store already created icons so we don't overpollute the temp dir
 tempfolder = None # store icons inside a subfolder in temp dir
-
+defaulticon = None # store a default icon for problematic file types
 
 def gethexcolor(color):
 
@@ -71,7 +71,7 @@ def getInfo(filename):
     "returns available file information"
 
     global iconbank,tempfolder
-    
+
     tformat = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Start").GetString("TimeFormat","%m/%d/%Y %H:%M:%S")
 
     def getLocalTime(timestamp):
@@ -89,7 +89,7 @@ def getInfo(filename):
         return hsize
 
     if os.path.exists(filename):
-        
+
         if os.path.isdir(filename):
             return None
 
@@ -106,7 +106,11 @@ def getInfo(filename):
 
         # get additional info from fcstd files
         if filename.lower().endswith(".fcstd"):
-            zfile=zipfile.ZipFile(filename)
+            try:
+                zfile=zipfile.ZipFile(filename)
+            except:
+                print("Cannot read file: ",filename)
+                return None
             files=zfile.namelist()
             # check for meta-file if it's really a FreeCAD document
             if files[0] == "Document.xml":
@@ -139,14 +143,19 @@ def getInfo(filename):
         if not image:
             i = QtCore.QFileInfo(filename)
             t = iconprovider.type(i)
+            if not t:
+                t = "Unknown"
             if t in iconbank:
                 image = iconbank[t]
             else:
                 icon = iconprovider.icon(i)
-                preferred = icon.actualSize(QtCore.QSize(128,128))
-                px = icon.pixmap(preferred)
-                image = tempfile.mkstemp(dir=tempfolder,suffix='.png')[1]
-                px.save(image)
+                if icon.availableSizes():
+                    preferred = icon.actualSize(QtCore.QSize(128,128))
+                    px = icon.pixmap(preferred)
+                    image = tempfile.mkstemp(dir=tempfolder,suffix='.png')[1]
+                    px.save(image)
+                else:
+                    image = getDefaultIcon()
                 iconbank[t] = image
 
         return [image,size,author,ctime,mtime,descr,company,lic]
@@ -155,8 +164,27 @@ def getInfo(filename):
 
 
 
+def getDefaultIcon():
+
+    "retrieves or creates a default file icon"
+
+    global defaulticon
+
+    if not defaulticon:
+        i = QtCore.QFileInfo("Unknown")
+        icon = iconprovider.icon(i)
+        preferred = icon.actualSize(QtCore.QSize(128,128))
+        px = icon.pixmap(preferred)
+        image = tempfile.mkstemp(dir=tempfolder,suffix='.png')[1]
+        px.save(image)
+        defaulticon = image
+
+    return defaulticon
+
+
+
 def buildCard(filename,method,arg=None):
-    
+
     "builds a html <li> element representing a file. method is a script + a keyword, for ex. url.py?key="
 
     result = ""
@@ -174,16 +202,16 @@ def buildCard(filename,method,arg=None):
             if finfo[5]:
                 infostring += "\n\n" + finfo[5]
             if size:
-                result += '<li class="icon">'
                 result += '<a href="'+method+arg+'" title="'+infostring+'">'
+                result += '<li class="icon">'
                 result += '<img src="'+image+'">'
                 result += '<div class="caption">'
                 result += '<h4>'+basename+'</h4>'
                 result += '<p>'+size+'</p>'
                 result += '<p>'+author+'</p>'
                 result += '</div>'
-                result += '</a>'
                 result += '</li>'
+                result += '</a>'
     return result
 
 
@@ -302,17 +330,20 @@ def handle():
     if rfcount:
         SECTION_RECENTFILES = "<h2>"+TranslationTexts.T_RECENTFILES+"</h2>"
         SECTION_RECENTFILES += "<ul>"
-        for i in range(rfcount):
-            filename = rf.GetString("MRU%d" % (i))
-            SECTION_RECENTFILES += buildCard(filename,method="LoadMRU.py?MRU=",arg=str(i))
-        SECTION_RECENTFILES += '<li class="icon">'
         SECTION_RECENTFILES += '<a href="LoadNew.py" title="'+TranslationTexts.T_CREATENEW+'">'
-        SECTION_RECENTFILES += '<img src="'+iconbank["createimg"]+'">'
+        SECTION_RECENTFILES += '<li class="icon">'
+        if FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Start").GetBool("NewFileGradient",False):
+            SECTION_RECENTFILES += '<img src="'+iconbank["createimg"]+'">'
+        else:
+            SECTION_RECENTFILES += '<img src="images/new_file_thumbnail.svg">'
         SECTION_RECENTFILES += '<div class="caption">'
         SECTION_RECENTFILES += '<h4>'+TranslationTexts.T_CREATENEW+'</h4>'
         SECTION_RECENTFILES += '</div>'
         SECTION_RECENTFILES += '</li>'
         SECTION_RECENTFILES += '</a>'
+        for i in range(rfcount):
+            filename = rf.GetString("MRU%d" % (i))
+            SECTION_RECENTFILES += buildCard(filename,method="LoadMRU.py?MRU=",arg=str(i))
         SECTION_RECENTFILES += '</ul>'
         if sys.version_info.major < 3:
             SECTION_RECENTFILES = SECTION_RECENTFILES.decode("utf8")
@@ -392,7 +423,7 @@ def handle():
         UL_WORKBENCHES += '</li>'
     UL_WORKBENCHES += '</ul>'
     HTML = HTML.replace("UL_WORKBENCHES",UL_WORKBENCHES)
-    
+
     # Detect additional addons that are not a workbench
 
     try:
@@ -466,11 +497,14 @@ def handle():
     Start.iconbank = iconbank
     Start.tempfolder = tempfolder
 
-    # encode if necessary
+    # make sure we are always returning unicode
+    # HTML should be a str-object and therefore:
+    # - for py2 HTML is a bytes object and has to be decoded to unicode
+    # - for py3 HTML is already a unicode object and the next 2 lines can be removed
+    #    once py2-support is removed.
 
-    if sys.version_info.major < 3:
-        if isinstance(HTML,unicode):
-            HTML = HTML.encode("utf8")
+    if isinstance(HTML, bytes):
+        HTML = HTML.decode("utf8")
 
     return HTML
 
@@ -480,7 +514,7 @@ def exportTestFile():
 
     "Allow to check if everything is Ok"
 
-    f = open(os.path.expanduser("~")+os.sep+"freecad-startpage.html","wb")
+    f = open(os.path.expanduser("~")+os.sep+"freecad-startpage.html","w")
     f.write(handle())
     f.close()
 
@@ -521,4 +555,3 @@ def checkPostOpenStartPage():
         if len(sys.argv) > 1:
             postStart()
     Start.CanOpenStartPage = True
-

@@ -24,6 +24,7 @@
 #include "PreCompiled.h"
 
 #ifndef _PreComp_
+# include <algorithm>
 # include <QAbstractButton>
 # include <qapplication.h>
 # include <qdir.h>
@@ -31,7 +32,7 @@
 # include <QKeySequence>
 # include <qmessagebox.h>
 # include <qstatusbar.h>
-# include <boost/signals.hpp>
+# include <boost/signals2.hpp>
 # include <boost/bind.hpp>
 # include <Inventor/actions/SoSearchAction.h>
 # include <Inventor/nodes/SoSeparator.h>
@@ -89,7 +90,7 @@ struct DocumentP
     std::map<const App::DocumentObject*,ViewProviderDocumentObject*> _ViewProviderMap;
     std::map<std::string,ViewProvider*> _ViewProviderMapAnnotation;
 
-    typedef boost::signals::connection Connection;
+    typedef boost::signals2::connection Connection;
     Connection connectNewObject;
     Connection connectDelObject;
     Connection connectCngObject;
@@ -105,6 +106,8 @@ struct DocumentP
     Connection connectRedoDocument;
     Connection connectTransactionAppend;
     Connection connectTransactionRemove;
+    typedef boost::signals2::shared_connection_block ConnectionBlock;
+    ConnectionBlock connectActObjectBlocker;
 };
 
 } // namespace Gui
@@ -138,6 +141,8 @@ Document::Document(App::Document* pcDocument,Application * app)
         (boost::bind(&Gui::Document::slotRelabelObject, this, _1));
     d->connectActObject = pcDocument->signalActivatedObject.connect
         (boost::bind(&Gui::Document::slotActivatedObject, this, _1));
+    d->connectActObjectBlocker = boost::signals2::shared_connection_block
+        (d->connectActObject, false);
     d->connectSaveDocument = pcDocument->signalSaveDocument.connect
         (boost::bind(&Gui::Document::Save, this, _1));
     d->connectRestDocument = pcDocument->signalRestoreDocument.connect
@@ -151,7 +156,7 @@ Document::Document(App::Document* pcDocument,Application * app)
         (boost::bind(&Gui::Document::exportObjects, this, _1, _2));
     d->connectImportObjects = pcDocument->signalImportViewObjects.connect
         (boost::bind(&Gui::Document::importObjects, this, _1, _2, _3));
-        
+
     d->connectUndoDocument = pcDocument->signalUndo.connect
         (boost::bind(&Gui::Document::slotUndoDocument, this, _1));
     d->connectRedoDocument = pcDocument->signalRedo.connect
@@ -209,6 +214,7 @@ Document::~Document()
         delete it2->second;
 
     // remove the reference from the object
+    Base::PyGILStateLocker lock;
     _pcDocPy->setInvalid();
     _pcDocPy->DecRef();
     delete d;
@@ -552,6 +558,16 @@ void Document::slotTransactionRemove(const App::DocumentObject& obj, App::Transa
     it = d->_ViewProviderMap.find(&obj);
     if (it != d->_ViewProviderMap.end()) {
         ViewProvider* viewProvider = it->second;
+
+        // Issue #0003540:
+        // When deleting a view provider that claims the Inventor nodes
+        // of its children then we must update the 3d viewers to re-add
+        // the root nodes if needed.
+        bool rebuild = false;
+        SoGroup* childGroup =  viewProvider->getChildRoot();
+        if (childGroup && childGroup->getNumChildren() > 0)
+            rebuild = true;
+
         d->_ViewProviderMap.erase(&obj);
         // transaction being a nullptr indicates that undo/redo is off and the object
         // can be safely deleted
@@ -559,6 +575,9 @@ void Document::slotTransactionRemove(const App::DocumentObject& obj, App::Transa
             transaction->addObjectNew(viewProvider);
         else
             delete viewProvider;
+
+        if (rebuild)
+            rebuildRootNodes();
     }
 }
 
@@ -851,14 +870,14 @@ void Document::slotStartRestoreDocument(const App::Document& doc)
     if (d->_pcDocument != &doc)
         return;
     // disable this signal while loading a document
-    d->connectActObject.block();
+    d->connectActObjectBlocker.block();
 }
 
 void Document::slotFinishRestoreDocument(const App::Document& doc)
 {
     if (d->_pcDocument != &doc)
         return;
-    d->connectActObject.unblock();
+    d->connectActObjectBlocker.unblock();
     App::DocumentObject* act = doc.getActiveObject();
     if (act) {
         ViewProvider* viewProvider = getViewProvider(act);
@@ -1389,6 +1408,36 @@ MDIView* Document::getActiveView(void) const
     return active;
 }
 
+/**
+ * @brief Document::setActiveWindow
+ * If this document is active and the view is part of it then it will be
+ * activated. If the document is not active of the view is already active
+ * nothing is done.
+ * @param view
+ */
+void Document::setActiveWindow(Gui::MDIView* view)
+{
+    // get the main window's active view
+    MDIView* active = getMainWindow()->activeWindow();
+
+    // view is already active
+    if (active == view)
+        return;
+
+    // get all MDI views of the document
+    std::list<MDIView*> mdis = getMDIViews();
+
+    // this document is not active
+    if (std::find(mdis.begin(), mdis.end(), active) == mdis.end())
+        return;
+
+    // the view is not part of the document
+    if (std::find(mdis.begin(), mdis.end(), view) == mdis.end())
+        return;
+
+    getMainWindow()->setActiveWindow(view);
+}
+
 Gui::MDIView* Document::getViewOfNode(SoNode* node) const
 {
     std::list<MDIView*> mdis = getMDIViewsOfType(View3DInventor::getClassTypeId());
@@ -1526,25 +1575,30 @@ void Document::handleChildren3D(ViewProvider* viewProvider)
     
     //find all unclaimed viewproviders and add them back to the document (this happens if a 
     //viewprovider has been claimed before, but the object dropped it. 
-    if(rebuild) {
-        auto vpmap = d->_ViewProviderMap;
-        for( auto& pair  : d->_ViewProviderMap ) {
-            auto claimed = pair.second->claimChildren3D();
-            for(auto obj : claimed) {
-                auto it = vpmap.find(obj);
-                if(it != vpmap.end())
-                    vpmap.erase(it);
+    if (rebuild) {
+        rebuildRootNodes();
+    }
+}
+
+void Document::rebuildRootNodes()
+{
+    auto vpmap = d->_ViewProviderMap;
+    for (auto& pair  : d->_ViewProviderMap) {
+        auto claimed = pair.second->claimChildren3D();
+        for (auto obj : claimed) {
+            auto it = vpmap.find(obj);
+            if (it != vpmap.end())
+                vpmap.erase(it);
+        }
+    }
+
+    for (auto& pair : vpmap) {
+        // cycling to all views of the document to add the viewprovider to the viewer itself
+        for (std::list<Gui::BaseView*>::iterator vIt = d->baseViews.begin();vIt != d->baseViews.end();++vIt) {
+            View3DInventor *activeView = dynamic_cast<View3DInventor *>(*vIt);
+            if (activeView && !activeView->getViewer()->hasViewProvider(pair.second)) {
+                activeView->getViewer()->addViewProvider(pair.second);
             }
         }
-        for(auto& pair : vpmap) {
-            
-            // cycling to all views of the document to add the viewprovider to the viewer itself
-            for (std::list<Gui::BaseView*>::iterator vIt = d->baseViews.begin();vIt != d->baseViews.end();++vIt) {
-                View3DInventor *activeView = dynamic_cast<View3DInventor *>(*vIt);
-                if (activeView && !activeView->getViewer()->hasViewProvider(pair.second)) {
-                    activeView->getViewer()->addViewProvider(pair.second);
-                }
-            }   
-        }   
     }
 }

@@ -73,13 +73,7 @@ void EditDatumDialog::customEvent(QEvent*)
 void EditDatumDialog::exec(bool atCursor)
 {
     // Return if constraint doesn't have editable value
-    if (Constr->Type == Sketcher::Distance ||
-        Constr->Type == Sketcher::DistanceX || 
-        Constr->Type == Sketcher::DistanceY ||
-        Constr->Type == Sketcher::Radius ||
-        Constr->Type == Sketcher::Diameter ||
-        Constr->Type == Sketcher::Angle ||
-        Constr->Type == Sketcher::SnellsLaw) {
+    if (Constr->isDimensional()) {
 
         if (sketch->hasConflicts()) {
             QMessageBox::critical(qApp->activeWindow(), QObject::tr("Distance constraint"),
@@ -179,7 +173,7 @@ void EditDatumDialog::exec(bool atCursor)
                         sketch->solve();
                     }
 
-                    tryAutoRecompute();
+                    tryAutoRecompute(sketch);
                 }
                 catch (const Base::Exception& e) {
                     QMessageBox::critical(qApp->activeWindow(), QObject::tr("Dimensional constraint"), QString::fromUtf8(e.what()));

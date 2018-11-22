@@ -65,7 +65,7 @@ FemMeshShapeNetgenObject::FemMeshShapeNetgenObject()
     ADD_PROPERTY_TYPE(GrowthRate,(0.3),     "MeshParams",Prop_None," allows to define how much the linear dimensions of two adjacent cells can differ");
     ADD_PROPERTY_TYPE(NbSegsPerEdge,(1),    "MeshParams",Prop_None,"allows to define the minimum number of mesh segments in which edges will be split");
     ADD_PROPERTY_TYPE(NbSegsPerRadius,(2),  "MeshParams",Prop_None,"allows to define the minimum number of mesh segments in which radiuses will be split");
-    ADD_PROPERTY_TYPE(Optimize,(true),      "MeshParams",Prop_None,"Shape for the analysis");
+    ADD_PROPERTY_TYPE(Optimize,(true),      "MeshParams",Prop_None,"Optimize the resulting mesh");
 
 }
 
@@ -99,7 +99,7 @@ App::DocumentObjectExecReturn *FemMeshShapeNetgenObject::execute(void)
 
     myNetGenMesher.Compute();
 
-    // throw Base::Exception("Compute Done\n");
+    // throw Base::RuntimeError("Compute Done\n");
 
     SMESHDS_Mesh* data = const_cast<SMESH_Mesh*>(newMesh.getSMesh())->GetMeshDS();
     const SMDS_MeshInfo& info = data->GetMeshInfo();

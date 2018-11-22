@@ -66,6 +66,11 @@ class UnitBasicCases(unittest.TestCase):
         qu = FreeCAD.Units.Quantity("237.000 W/mm/K")
         self.assertTrue(ts(qu), ts2(qu))
 
+    def testDivide(self):
+        qu1 = FreeCAD.Units.Quantity("1 m/s")
+        qu2 = FreeCAD.Units.Quantity("m/s")
+        self.assertTrue(qu1/qu2, 1)
+
     def testSchemes(self):
         schemes = FreeCAD.Units.listSchemas()
         num = len(schemes)
@@ -74,13 +79,13 @@ class UnitBasicCases(unittest.TestCase):
         for i in range(num):
             t = FreeCAD.Units.schemaTranslate(psi, i)
             v = FreeCAD.Units.parseQuantity(t[0]).getValueAs("psi")
-            self.assertAlmostEqual(1, v.Value, msg="Failed with \"{0}\" scheme: {1} != 1".format(schemes[i], v.Value), delta=self.delta)
+            self.assertAlmostEqual(1, v.Value, msg="Failed with \"{0}\" scheme: {1} != 1 (delta: {2})".format(schemes[i], v.Value, self.delta), delta=self.delta)
 
         ksi = FreeCAD.Units.parseQuantity("1ksi")
         for i in range(num):
             t = FreeCAD.Units.schemaTranslate(ksi, i)
             v = FreeCAD.Units.parseQuantity(t[0]).getValueAs("ksi")
-            self.assertAlmostEqual(1, v.Value, msg="Failed with \"{0}\" scheme: {1} != 1".format(schemes[i], v.Value), delta=self.delta)
+            self.assertAlmostEqual(1, v.Value, msg="Failed with \"{0}\" scheme: {1} != 1 (delta: {2})".format(schemes[i], v.Value, self.delta), delta=self.delta)
 
     def testTrigonometric(self):
         #tu=FreeCAD.Units.translateUnit

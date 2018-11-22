@@ -217,7 +217,7 @@ class _CommandFemElementFluid1D(CommandManager):
     "The FEM_ElementFluid1D command definition"
     def __init__(self):
         super(_CommandFemElementFluid1D, self).__init__()
-        self.resources = {'Pixmap': 'fem-fluid-section',
+        self.resources = {'Pixmap': 'fem-element-fluid-1d',
                           'MenuText': QtCore.QT_TRANSLATE_NOOP("FEM_ElementFluid1D", "Fluid section for 1D flow"),
                           'Accel': "C, B",
                           'ToolTip': QtCore.QT_TRANSLATE_NOOP("FEM_ElementFluid1D", "Creates a FEM fluid section for 1D flow")}
@@ -236,7 +236,7 @@ class _CommandFemElementGeometry1D(CommandManager):
     "The Fem_ElementGeometry1D command definition"
     def __init__(self):
         super(_CommandFemElementGeometry1D, self).__init__()
-        self.resources = {'Pixmap': 'fem-beam-section',
+        self.resources = {'Pixmap': 'fem-element-geometry-1d',
                           'MenuText': QtCore.QT_TRANSLATE_NOOP("FEM_ElementGeometry1D", "Beam cross section"),
                           'Accel': "C, B",
                           'ToolTip': QtCore.QT_TRANSLATE_NOOP("FEM_ElementGeometry1D", "Creates a FEM beam cross section")}
@@ -255,7 +255,7 @@ class _CommandFemElementGeometry2D(CommandManager):
     "The FEM_ElementGeometry2D command definition"
     def __init__(self):
         super(_CommandFemElementGeometry2D, self).__init__()
-        self.resources = {'Pixmap': 'fem-shell-thickness',
+        self.resources = {'Pixmap': 'fem-element-geometry-2d',
                           'MenuText': QtCore.QT_TRANSLATE_NOOP("FEM_ElementGeometry2D", "Shell plate thickness"),
                           'Accel': "C, S",
                           'ToolTip': QtCore.QT_TRANSLATE_NOOP("FEM_ElementGeometry2D", "Creates a FEM shell plate thickness")}
@@ -274,7 +274,7 @@ class _CommandFemElementRotation1D(CommandManager):
     "The Fem_ElementRotation1D command definition"
     def __init__(self):
         super(_CommandFemElementRotation1D, self).__init__()
-        self.resources = {'Pixmap': 'fem-beam-rotation',
+        self.resources = {'Pixmap': 'fem-element-rotation-1d',
                           'MenuText': QtCore.QT_TRANSLATE_NOOP("FEM_ElementRotation1D", "Beam rotation"),
                           'Accel': "C, R",
                           'ToolTip': QtCore.QT_TRANSLATE_NOOP("FEM_ElementRotation1D", "Creates a FEM beam rotation")}
@@ -394,7 +394,7 @@ class _CommandFemMaterialFluid(CommandManager):
     def __init__(self):
         super(_CommandFemMaterialFluid, self).__init__()
         self.resources = {'Pixmap': 'fem-material-fluid',
-                          'MenuText': QtCore.QT_TRANSLATE_NOOP("FEM_MaterialFluid", "FEM material for fluid"),
+                          'MenuText': QtCore.QT_TRANSLATE_NOOP("FEM_MaterialFluid", "Material for fluid"),
                           'Accel': "M, M",
                           'ToolTip': QtCore.QT_TRANSLATE_NOOP("FEM_MaterialFluid", "Creates a FEM material for fluid")}
         self.is_active = 'with_analysis'
@@ -435,8 +435,9 @@ class _CommandFemMaterialMechanicalNonlinear(CommandManager):
                     # we do not change attributes if we have more than one solver, since we do not know which one to take
                     solver_object = None
                     break
-        # check new frame work solver and old frame work solver
-        if solver_object and (hasattr(solver_object, "SolverType") and solver_object.SolverType == 'FemSolverCalculix' or (hasattr(solver_object, "Proxy") and solver_object.Proxy.Type == 'Fem::FemSolverObjectCalculix')):
+        # set solver attribute for nonlinearity for ccxtools CalculiX solver or new frame work CalculiX solver
+        if solver_object and hasattr(solver_object, "Proxy") and (solver_object.Proxy.Type == 'Fem::FemSolverCalculixCcxTools' or solver_object.Proxy.Type == 'Fem::FemSolverObjectCalculix'):
+            print('Set MaterialNonlinearity and GeometricalNonlinearity to nonlinear for ' + solver_object.Label)
             solver_object.MaterialNonlinearity = "nonlinear"
             solver_object.GeometricalNonlinearity = "nonlinear"
         FreeCADGui.Selection.clearSelection()
@@ -448,7 +449,7 @@ class _CommandFemMaterialSolid(CommandManager):
     def __init__(self):
         super(_CommandFemMaterialSolid, self).__init__()
         self.resources = {'Pixmap': 'fem-material',
-                          'MenuText': QtCore.QT_TRANSLATE_NOOP("FEM_MaterialSolid", "FEM material for solid"),
+                          'MenuText': QtCore.QT_TRANSLATE_NOOP("FEM_MaterialSolid", "Material for solid"),
                           'Accel': "M, M",
                           'ToolTip': QtCore.QT_TRANSLATE_NOOP("FEM_MaterialSolid", "Creates a FEM material for solid")}
         self.is_active = 'with_analysis'
@@ -523,6 +524,26 @@ class _CommandFemMeshClear(CommandManager):
         FreeCAD.ActiveDocument.openTransaction("Clear FEM mesh")
         FreeCADGui.addModule("Fem")
         FreeCADGui.doCommand("FreeCAD.ActiveDocument." + self.selobj.Name + ".FemMesh = Fem.FemMesh()")
+        FreeCADGui.Selection.clearSelection()
+        FreeCAD.ActiveDocument.recompute()
+
+
+class _CommandFemMeshDisplayInfo(CommandManager):
+    "The FEM_MeshDisplayInfo command definition"
+    def __init__(self):
+        super(_CommandFemMeshDisplayInfo, self).__init__()
+        self.resources = {'Pixmap': 'fem-femmesh-print-info',
+                          'MenuText': QtCore.QT_TRANSLATE_NOOP("FEM_MeshDisplayInfo", "Display FEM mesh info"),
+                          # 'Accel': "Z, Z",
+                          'ToolTip': QtCore.QT_TRANSLATE_NOOP("FEM_MeshDisplayInfo", "Display FEM mesh info")}
+        self.is_active = 'with_femmesh'
+
+    def Activated(self):
+        FreeCAD.ActiveDocument.openTransaction("Display FEM mesh info")
+        FreeCADGui.doCommand("print(FreeCAD.ActiveDocument." + self.selobj.Name + ".FemMesh)")
+        FreeCADGui.addModule("PySide")
+        FreeCADGui.doCommand("mesh_info = str(FreeCAD.ActiveDocument." + self.selobj.Name + ".FemMesh)")
+        FreeCADGui.doCommand("PySide.QtGui.QMessageBox.information(None, 'FEM Mesh Info', mesh_info)")
         FreeCADGui.Selection.clearSelection()
         FreeCAD.ActiveDocument.recompute()
 
@@ -602,26 +623,6 @@ class _CommandFemMeshNetgenFromShape(CommandManager):
         # a recompute immediately starts meshing when task panel is opened, this is not intended
 
 
-class _CommandFemMeshPrintInfo(CommandManager):
-    "The FEM_MeshPrintInfo command definition"
-    def __init__(self):
-        super(_CommandFemMeshPrintInfo, self).__init__()
-        self.resources = {'Pixmap': 'fem-femmesh-print-info',
-                          'MenuText': QtCore.QT_TRANSLATE_NOOP("FEM_MeshPrintInfo", "Print FEM mesh info"),
-                          # 'Accel': "Z, Z",
-                          'ToolTip': QtCore.QT_TRANSLATE_NOOP("FEM_MeshPrintInfo", "Print FEM mesh info")}
-        self.is_active = 'with_femmesh'
-
-    def Activated(self):
-        FreeCAD.ActiveDocument.openTransaction("Print FEM mesh info")
-        FreeCADGui.doCommand("print(FreeCAD.ActiveDocument." + self.selobj.Name + ".FemMesh)")
-        FreeCADGui.addModule("PySide")
-        FreeCADGui.doCommand("mesh_info = str(FreeCAD.ActiveDocument." + self.selobj.Name + ".FemMesh)")
-        FreeCADGui.doCommand("PySide.QtGui.QMessageBox.information(None, 'FEM Mesh Info', mesh_info)")
-        FreeCADGui.Selection.clearSelection()
-        FreeCAD.ActiveDocument.recompute()
-
-
 class _CommandFemMeshRegion(CommandManager):
     "The FEM_MeshRegion command definition"
     def __init__(self):
@@ -652,7 +653,7 @@ class _CommandFemResultShow(CommandManager):
         self.is_active = 'with_selresult'
 
     def Activated(self):
-        self.selobj.ViewObject.startEditing()
+        self.selobj.ViewObject.Document.setEdit(self.selobj.ViewObject, 0)
 
 
 class _CommandFemResultsPurge(CommandManager):
@@ -674,7 +675,7 @@ class _CommandFemSolverCalculixCxxtools(CommandManager):
     "The FEM_SolverCalculix ccx tools command definition"
     def __init__(self):
         super(_CommandFemSolverCalculixCxxtools, self).__init__()
-        self.resources = {'Pixmap': 'fem-solver',
+        self.resources = {'Pixmap': 'fem-solver-standard',
                           'MenuText': QtCore.QT_TRANSLATE_NOOP("FEM_SolverCalculix", "Solver CalculiX Standard"),
                           'Accel': "S, X",
                           'ToolTip': QtCore.QT_TRANSLATE_NOOP("FEM_SolverCalculix", "Creates a standard FEM solver CalculiX with ccx tools")}
@@ -703,7 +704,7 @@ class _CommandFemSolverCalculiX(CommandManager):
     "The FEM_SolverCalculix command definition"
     def __init__(self):
         super(_CommandFemSolverCalculiX, self).__init__()
-        self.resources = {'Pixmap': 'fem-solver',
+        self.resources = {'Pixmap': 'fem-solver-standard',
                           'MenuText': QtCore.QT_TRANSLATE_NOOP("FEM_SolverCalculiX", "Solver CalculiX (experimental)"),
                           'Accel': "S, C",
                           'ToolTip': QtCore.QT_TRANSLATE_NOOP("FEM_SolverCalculiX", "Creates a FEM solver CalculiX (experimental)")}
@@ -721,7 +722,7 @@ class _CommandFemSolverControl(CommandManager):
     "The FEM_SolverControl command definition"
     def __init__(self):
         super(_CommandFemSolverControl, self).__init__()
-        self.resources = {'Pixmap': 'fem-control-solver',
+        self.resources = {'Pixmap': 'fem-solver-control',
                           'MenuText': QtCore.QT_TRANSLATE_NOOP("FEM_SolverControl", "Solver job control"),
                           'Accel': "S, C",
                           'ToolTip': QtCore.QT_TRANSLATE_NOOP("FEM_SolverControl", "Changes solver attributes and runs the calculations for the selected solver")}
@@ -735,7 +736,7 @@ class _CommandFemSolverElmer(CommandManager):
     "The FEM_SolverElmer command definition"
     def __init__(self):
         super(_CommandFemSolverElmer, self).__init__()
-        self.resources = {'Pixmap': 'fem-elmer',
+        self.resources = {'Pixmap': 'fem-solver-elmer',
                           'MenuText': QtCore.QT_TRANSLATE_NOOP("FEM_SolverElmer", "Solver Elmer"),
                           'Accel': "S, E",
                           'ToolTip': QtCore.QT_TRANSLATE_NOOP("FEM_SolverElmer", "Creates a FEM solver Elmer")}
@@ -753,7 +754,7 @@ class _CommandFemSolverRun(CommandManager):
     "The FEM_SolverRun command definition"
     def __init__(self):
         super(_CommandFemSolverRun, self).__init__()
-        self.resources = {'Pixmap': 'fem-run-solver',
+        self.resources = {'Pixmap': 'fem-solver-run',
                           'MenuText': QtCore.QT_TRANSLATE_NOOP("FEM_SolverRun", "Run solver calculations"),
                           'Accel': "R, C",
                           'ToolTip': QtCore.QT_TRANSLATE_NOOP("FEM_SolverRun", "Runs the calculations for the selected solver")}
@@ -766,6 +767,11 @@ class _CommandFemSolverRun(CommandManager):
         def load_results(ret_code):
             if ret_code == 0:
                 self.fea.load_results()
+            elif ret_code == 201:
+                if self.fea.solver.AnalysisType == 'check':
+                    print('We run into the NOANALYSIS problem!')
+                    # https://forum.freecadweb.org/viewtopic.php?f=18&t=31303&start=10#p260743
+                    self.fea.load_results()
             else:
                 print("CalculiX failed ccx finished with error {}".format(ret_code))
 
@@ -812,7 +818,7 @@ class _CommandFemSolverZ88(CommandManager):
     "The FEM_SolverZ88 command definition"
     def __init__(self):
         super(_CommandFemSolverZ88, self).__init__()
-        self.resources = {'Pixmap': 'fem-solver',
+        self.resources = {'Pixmap': 'fem-solver-standard',
                           'MenuText': QtCore.QT_TRANSLATE_NOOP("FEM_SolverZ88", "Solver Z88"),
                           'Accel': "S, Z",
                           'ToolTip': QtCore.QT_TRANSLATE_NOOP("FEM_SolverZ88", "Creates a FEM solver Z88")}
@@ -850,10 +856,10 @@ FreeCADGui.addCommand('FEM_MaterialSolid', _CommandFemMaterialSolid())
 FreeCADGui.addCommand('FEM_FEMMesh2Mesh', _CommandFemMesh2Mesh())
 FreeCADGui.addCommand('FEM_MeshBoundaryLayer', _CommandFemMeshBoundaryLayer())
 FreeCADGui.addCommand('FEM_MeshClear', _CommandFemMeshClear())
+FreeCADGui.addCommand('FEM_MeshDisplayInfo', _CommandFemMeshDisplayInfo())
 FreeCADGui.addCommand('FEM_MeshGmshFromShape', _CommandFemMeshGmshFromShape())
 FreeCADGui.addCommand('FEM_MeshGroup', _CommandFemMeshGroup())
 FreeCADGui.addCommand('FEM_MeshNetgenFromShape', _CommandFemMeshNetgenFromShape())
-FreeCADGui.addCommand('FEM_MeshPrintInfo', _CommandFemMeshPrintInfo())
 FreeCADGui.addCommand('FEM_MeshRegion', _CommandFemMeshRegion())
 FreeCADGui.addCommand('FEM_ResultShow', _CommandFemResultShow())
 FreeCADGui.addCommand('FEM_ResultsPurge', _CommandFemResultsPurge())

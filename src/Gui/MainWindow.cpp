@@ -51,7 +51,6 @@
 # include <QWhatsThis>
 #endif
 
-#include <boost/signals.hpp>
 #include <boost/bind.hpp>
 
 // FreeCAD Base header
@@ -334,20 +333,34 @@ MainWindow::MainWindow(QWidget * parent, Qt::WindowFlags f)
 
     // Tree view
     if (hiddenDockWindows.find("Std_TreeView") == std::string::npos) {
-        TreeDockWidget* tree = new TreeDockWidget(0, this);
-        tree->setObjectName
-            (QString::fromLatin1(QT_TRANSLATE_NOOP("QDockWidget","Tree view")));
-        tree->setMinimumWidth(210);
-        pDockMgr->registerDockWindow("Std_TreeView", tree);
+        //work through parameter.
+        ParameterGrp::handle group = App::GetApplication().GetUserParameter().
+              GetGroup("BaseApp")->GetGroup("Preferences")->GetGroup("DockWindows")->GetGroup("TreeView");
+        bool enabled = group->GetBool("Enabled", true);
+        group->SetBool("Enabled", enabled); //ensure entry exists.
+        if (enabled) {
+            TreeDockWidget* tree = new TreeDockWidget(0, this);
+            tree->setObjectName
+                (QString::fromLatin1(QT_TRANSLATE_NOOP("QDockWidget","Tree view")));
+            tree->setMinimumWidth(210);
+            pDockMgr->registerDockWindow("Std_TreeView", tree);
+        }
     }
 
     // Property view
     if (hiddenDockWindows.find("Std_PropertyView") == std::string::npos) {
-        PropertyDockView* pcPropView = new PropertyDockView(0, this);
-        pcPropView->setObjectName
-            (QString::fromLatin1(QT_TRANSLATE_NOOP("QDockWidget","Property view")));
-        pcPropView->setMinimumWidth(210);
-        pDockMgr->registerDockWindow("Std_PropertyView", pcPropView);
+        //work through parameter.
+        ParameterGrp::handle group = App::GetApplication().GetUserParameter().
+              GetGroup("BaseApp")->GetGroup("Preferences")->GetGroup("DockWindows")->GetGroup("PropertyView");
+        bool enabled = group->GetBool("Enabled", true);
+        group->SetBool("Enabled", enabled); //ensure entry exists.
+        if (enabled) {
+            PropertyDockView* pcPropView = new PropertyDockView(0, this);
+            pcPropView->setObjectName
+                (QString::fromLatin1(QT_TRANSLATE_NOOP("QDockWidget","Property view")));
+            pcPropView->setMinimumWidth(210);
+            pDockMgr->registerDockWindow("Std_PropertyView", pcPropView);
+        }
     }
 
     // Selection view
@@ -406,16 +419,24 @@ MainWindow::MainWindow(QWidget * parent, Qt::WindowFlags f)
     //Dag View.
     if (hiddenDockWindows.find("Std_DAGView") == std::string::npos) {
         //work through parameter.
+        // old group name
+        ParameterGrp::handle deprecateGroup = App::GetApplication().GetUserParameter().
+              GetGroup("BaseApp")->GetGroup("Preferences");
+        bool enabled = false;
+        if (deprecateGroup->HasGroup("DAGView")) {
+            deprecateGroup = deprecateGroup->GetGroup("DAGView");
+            enabled = deprecateGroup->GetBool("Enabled", enabled);
+        }
+        // new group name
         ParameterGrp::handle group = App::GetApplication().GetUserParameter().
-              GetGroup("BaseApp")->GetGroup("Preferences")->GetGroup("DAGView");
-        bool enabled = group->GetBool("Enabled", false);
+              GetGroup("BaseApp")->GetGroup("Preferences")->GetGroup("DockWindows")->GetGroup("DAGView");
+        enabled = group->GetBool("Enabled", enabled);
         group->SetBool("Enabled", enabled); //ensure entry exists.
-        if (enabled)
-        {
-          DAG::DockWindow *dagDockWindow = new DAG::DockWindow(nullptr, this);
-          dagDockWindow->setObjectName
-              (QString::fromLatin1(QT_TRANSLATE_NOOP("QDockWidget","DAG View")));
-          pDockMgr->registerDockWindow("Std_DAGView", dagDockWindow);
+        if (enabled) {
+            DAG::DockWindow *dagDockWindow = new DAG::DockWindow(nullptr, this);
+            dagDockWindow->setObjectName
+                (QString::fromLatin1(QT_TRANSLATE_NOOP("QDockWidget","DAG View")));
+            pDockMgr->registerDockWindow("Std_DAGView", dagDockWindow);
         }
     }
 
@@ -976,8 +997,10 @@ void MainWindow::closeEvent (QCloseEvent * e)
         }
 
         /*emit*/ mainWindowClosed();
-        if (this->property("QuitOnClosed").isValid())
+        if (this->property("QuitOnClosed").isValid()) {
+            QApplication::closeAllWindows();
             qApp->quit(); // stop the event loop
+        }
     }
 }
 
@@ -1037,6 +1060,9 @@ void MainWindow::delayedStartup()
         try {
             Base::Interpreter().runString(Base::ScriptFactory().ProduceScript("FreeCADTest"));
         }
+        catch (const Base::SystemExitException&) {
+            throw;
+        }
         catch (const Base::Exception& e) {
             e.ReportException();
         }
@@ -1066,7 +1092,9 @@ void MainWindow::delayedStartup()
     // Create new document?
     ParameterGrp::handle hGrp = WindowParameter::getDefaultParameter()->GetGroup("Document");
     if (hGrp->GetBool("CreateNewDoc", false)) {
-        App::GetApplication().newDocument();
+        if (App::GetApplication().getDocuments().size()==0){
+            App::GetApplication().newDocument();
+        }
     }
 
     if (hGrp->GetBool("RecoveryEnabled", true)) {
@@ -1282,8 +1310,8 @@ void MainWindow::dropEvent (QDropEvent* e)
 {
     const QMimeData* data = e->mimeData();
     if (data->hasUrls()) {
-        // pass no document to let create a new one if needed
-        loadUrls(0, data->urls());
+        // load the files into the active document if there is one, otherwise let create one
+        loadUrls(App::GetApplication().getActiveDocument(), data->urls());
     }
     else {
         QMainWindow::dropEvent(e);
@@ -1533,7 +1561,7 @@ void MainWindow::loadUrls(App::Document* doc, const QList<QUrl>& url)
         }
     }
 
-    const char *docName = doc ? doc->getName() : "Unnamed";
+    QByteArray docName = doc ? QByteArray(doc->getName()) : qApp->translate("StdCmdNew","Unnamed").toUtf8();
     SelectModule::Dict dict = SelectModule::importHandler(files);
     // load the files with the associated modules
     for (SelectModule::Dict::iterator it = dict.begin(); it != dict.end(); ++it) {

@@ -34,7 +34,7 @@ class ArchWorkbench(Workbench):
 
         # arch tools
         self.archtools = ["Arch_Wall","Arch_Structure","Arch_Rebar","Arch_BuildingPart",
-                     "Arch_Floor","Arch_Building","Arch_Site",
+                     "Arch_Floor","Arch_Building","Arch_Site","Arch_Reference",
                      "Arch_Window","Arch_Roof","Arch_AxisTools",
                      "Arch_SectionPlane","Arch_Space","Arch_Stairs",
                      "Arch_PanelTools","Arch_Equipment",
@@ -136,5 +136,7 @@ FreeCADGui.addWorkbench(ArchWorkbench)
 import Arch_rc
 FreeCADGui.addPreferencePage(":/ui/preferences-ifc.ui","Import-Export")
 FreeCADGui.addPreferencePage(":/ui/preferences-dae.ui","Import-Export")
+
+FreeCAD.__unit_test__ += [ "TestArch" ]
 
 

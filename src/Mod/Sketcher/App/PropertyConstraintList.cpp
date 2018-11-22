@@ -342,9 +342,8 @@ void PropertyConstraintList::acceptGeometry(const std::vector<Part::Geometry *> 
     aboutToSetValue();
     validGeometryKeys.clear();
     validGeometryKeys.reserve(GeoList.size());
-    for (std::vector< Part::Geometry * >::const_iterator it=GeoList.begin();
-         it != GeoList.end(); ++it)
-        validGeometryKeys.push_back((*it)->getTypeId().getKey());
+    for (const auto& it : GeoList)
+        validGeometryKeys.push_back((it)->getTypeId().getKey());
     invalidGeometry = false;
     hasSetValue();
 }
@@ -440,7 +439,7 @@ void PropertyConstraintList::setPathValue(const ObjectIdentifier &path, const bo
         int index = c0.getIndex();
 
         if (c0.getIndex() >= _lValueList.size())
-            throw Base::Exception("Array out of bounds");
+            throw Base::IndexError("Array out of bounds");
         switch (_lValueList[index]->Type) {
         case Angle:
             dvalue = Base::toRadians<double>(dvalue);
@@ -474,7 +473,7 @@ void PropertyConstraintList::setPathValue(const ObjectIdentifier &path, const bo
             }
         }
     }
-    throw Base::Exception("Invalid constraint");
+    throw Base::ValueError("Invalid constraint");
 }
 
 const Constraint * PropertyConstraintList::getConstraint(const ObjectIdentifier &path) const
@@ -483,7 +482,7 @@ const Constraint * PropertyConstraintList::getConstraint(const ObjectIdentifier 
 
     if (c0.isArray() && path.numSubComponents() == 1) {
         if (c0.getIndex() >= _lValueList.size())
-            throw Base::Exception("Array out of bounds");
+            throw Base::IndexError("Array out of bounds");
 
         return _lValueList[c0.getIndex()];
     }
@@ -495,7 +494,7 @@ const Constraint * PropertyConstraintList::getConstraint(const ObjectIdentifier 
                 return *it;
         }
     }
-    throw Base::Exception("Invalid constraint");
+    throw Base::ValueError("Invalid constraint");
 }
 
 const boost::any PropertyConstraintList::getPathValue(const ObjectIdentifier &path) const
@@ -519,7 +518,7 @@ const ObjectIdentifier PropertyConstraintList::canonicalPath(const ObjectIdentif
         if (c1.isSimple())
             return p;
     }
-    throw Base::Exception("Invalid constraint");
+    throw Base::ValueError("Invalid constraint");
 }
 
 void PropertyConstraintList::getPaths(std::vector<ObjectIdentifier> &paths) const

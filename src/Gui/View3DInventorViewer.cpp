@@ -33,6 +33,7 @@
 # include <GL/gl.h>
 # endif
 # include <Inventor/SbBox.h>
+# include <Inventor/SoEventManager.h>
 # include <Inventor/actions/SoGetBoundingBoxAction.h>
 # include <Inventor/actions/SoGetMatrixAction.h>
 # include <Inventor/actions/SoHandleEventAction.h>
@@ -84,6 +85,8 @@
 # include <QMimeData>
 #endif
 
+#include <QVariantAnimation>
+
 #include <sstream>
 #include <Base/Console.h>
 #include <Base/Stream.h>
@@ -124,6 +127,7 @@
 
 #include <Inventor/draggers/SoCenterballDragger.h>
 #include <Inventor/annex/Profiler/SoProfiler.h>
+#include <Inventor/annex/HardCopy/SoVectorizePSAction.h>
 #include <Inventor/elements/SoOverrideElement.h>
 #include <Inventor/elements/SoLightModelElement.h>
 #include <QGesture>
@@ -602,7 +606,7 @@ void View3DInventorViewer::aboutToDestroyGLContext()
 
 void View3DInventorViewer::setDocument(Gui::Document* pcDocument)
 {
-    // write the document the viewer belongs to to the selection node
+    // write the document the viewer belongs to the selection node
     guiDocument = pcDocument;
     selectionRoot->pcDocument = pcDocument;
 }
@@ -625,7 +629,7 @@ void View3DInventorViewer::initialize()
 void View3DInventorViewer::OnChange(Gui::SelectionSingleton::SubjectType& rCaller,
                                     Gui::SelectionSingleton::MessageType Reason)
 {
-    Q_UNUSED(rCaller); 
+    Q_UNUSED(rCaller);
     if (Reason.Type == SelectionChanges::AddSelection ||
         Reason.Type == SelectionChanges::RmvSelection ||
         Reason.Type == SelectionChanges::SetSelection ||
@@ -720,6 +724,13 @@ SbBool View3DInventorViewer::setEditingViewProvider(Gui::ViewProvider* p, int Mo
 void View3DInventorViewer::resetEditingViewProvider()
 {
     if (this->editViewProvider) {
+        // In case the event action still has grabbed a node when leaving edit mode
+        // force to release it now
+        SoEventManager* mgr = this->getSoEventManager();
+        SoHandleEventAction* heaction = mgr->getHandleEventAction();
+        if (heaction && heaction->getGrabber())
+            heaction->releaseGrabber();
+
         this->editViewProvider->unsetEditViewer(this);
         removeEventCallback(SoEvent::getClassTypeId(), Gui::ViewProvider::eventCallback,this->editViewProvider);
         this->editViewProvider = 0;
@@ -866,6 +877,11 @@ void View3DInventorViewer::setNaviCubeCorner(int c)
 {
     if (naviCube)
         naviCube->setCorner(static_cast<NaviCube::Corner>(c));
+}
+
+NaviCube* View3DInventorViewer::getNavigationCube() const
+{
+    return naviCube;
 }
 
 void View3DInventorViewer::setAxisCross(bool on)
@@ -1167,9 +1183,9 @@ bool View3DInventorViewer::isSelecting() const
     return navigation->isSelecting();
 }
 
-const std::vector<SbVec2s>& View3DInventorViewer::getPolygon(SbBool* clip_inner) const
+const std::vector<SbVec2s>& View3DInventorViewer::getPolygon(SelectionRole* role) const
 {
-    return navigation->getPolygon(clip_inner);
+    return navigation->getPolygon(role);
 }
 
 SbVec2f View3DInventorViewer::screenCoordsOfPath(SoPath* path) const
@@ -1255,9 +1271,9 @@ std::vector<SbVec2f> View3DInventorViewer::getGLPolygon(const std::vector<SbVec2
     return poly;
 }
 
-std::vector<SbVec2f> View3DInventorViewer::getGLPolygon(SbBool* clip_inner) const
+std::vector<SbVec2f> View3DInventorViewer::getGLPolygon(SelectionRole* role) const
 {
-    const std::vector<SbVec2s>& pnts = navigation->getPolygon(clip_inner);
+    const std::vector<SbVec2s>& pnts = navigation->getPolygon(role);
     return getGLPolygon(pnts);
 }
 
@@ -1276,6 +1292,9 @@ bool View3DInventorViewer::dumpToFile(SoNode* node, const char* filename, bool b
         }
         else if (fi.hasExtension("idtf")) {
             vo = std::unique_ptr<SoVectorizeAction>(new SoFCVectorizeU3DAction());
+        }
+        else if (fi.hasExtension("ps") || fi.hasExtension("eps")) {
+            vo = std::unique_ptr<SoVectorizeAction>(new SoVectorizePSAction());
         }
         else {
             throw Base::ValueError("Not supported vector graphic");
@@ -2150,28 +2169,52 @@ void View3DInventorViewer::setCameraType(SoType t)
     }
 }
 
+namespace Gui {
+    class CameraAnimation : public QVariantAnimation
+    {
+        SoCamera* camera;
+        SbRotation startRot, endRot;
+        SbVec3f startPos, endPos;
+
+    public:
+        CameraAnimation(SoCamera* camera, const SbRotation& rot, const SbVec3f& pos)
+            : camera(camera), endRot(rot), endPos(pos)
+        {
+            startPos = camera->position.getValue();
+            startRot = camera->orientation.getValue();
+        }
+        virtual ~CameraAnimation()
+        {
+        }
+    protected:
+        void updateCurrentValue(const QVariant & value)
+        {
+            int steps = endValue().toInt();
+            int curr = value.toInt();
+
+            float s = static_cast<float>(curr)/static_cast<float>(steps);
+            SbVec3f curpos = startPos * (1.0f-s) + endPos * s;
+            SbRotation currot = SbRotation::slerp(startRot, endRot, s);
+            camera->orientation.setValue(currot);
+            camera->position.setValue(curpos);
+        }
+    };
+}
+
 void View3DInventorViewer::moveCameraTo(const SbRotation& rot, const SbVec3f& pos, int steps, int ms)
 {
     SoCamera* cam = this->getSoRenderManager()->getCamera();
     if (cam == 0) return;
 
-    SbVec3f campos = cam->position.getValue();
-    SbRotation camrot = cam->orientation.getValue();
+    CameraAnimation anim(cam, rot, pos);
+    anim.setDuration(Base::clamp<int>(ms,0,5000));
+    anim.setStartValue(static_cast<int>(0));
+    anim.setEndValue(steps);
 
     QEventLoop loop;
-    QTimer timer;
-    timer.setSingleShot(true);
-    QObject::connect(&timer, SIGNAL(timeout()), &loop, SLOT(quit()));
-
-    for (int i=0; i<steps; i++) {
-        float s = float(i)/float(steps);
-        SbVec3f curpos = campos * (1.0f-s) + pos * s;
-        SbRotation currot = SbRotation::slerp(camrot, rot, s);
-        cam->orientation.setValue(currot);
-        cam->position.setValue(curpos);
-        timer.start(Base::clamp<int>(ms,0,5000));
-        loop.exec(QEventLoop::ExcludeUserInputEvents);
-    }
+    QObject::connect(&anim, SIGNAL(finished()), &loop, SLOT(quit()));
+    anim.start();
+    loop.exec(QEventLoop::ExcludeUserInputEvents);
 
     cam->orientation.setValue(rot);
     cam->position.setValue(pos);
@@ -2199,6 +2242,8 @@ void View3DInventorViewer::animatedViewAll(int steps, int ms)
 
     SbSphere sphere;
     sphere.circumscribe(box);
+    if (sphere.getRadius() == 0)
+        return;
 
     SbVec3f direction, pos;
     camrot.multVec(SbVec3f(0, 0, -1), direction);
@@ -2271,6 +2316,19 @@ void View3DInventorViewer::boxZoom(const SbBox2s& box)
 
 void View3DInventorViewer::viewAll()
 {
+    SbViewportRegion vp = this->getSoRenderManager()->getViewportRegion();
+    SoGetBoundingBoxAction action(vp);
+    action.apply(this->getSoRenderManager()->getSceneGraph());
+    SbBox3f box = action.getBoundingBox();
+
+    if (box.isEmpty())
+        return;
+
+    SbSphere sphere;
+    sphere.circumscribe(box);
+    if (sphere.getRadius() == 0)
+        return;
+
     // in the scene graph we may have objects which we want to exclude
     // when doing a fit all. Such objects must be part of the group
     // SoSkipBoundingGroup.

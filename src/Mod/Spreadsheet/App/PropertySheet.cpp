@@ -456,13 +456,13 @@ void PropertySheet::setDisplayUnit(CellAddress address, const std::string &unit)
 void PropertySheet::setAlias(CellAddress address, const std::string &alias)
 {
     if (alias.size() > 0 && !isValidAlias(alias))
-        throw Base::Exception("Invalid alias");
+        throw Base::ValueError("Invalid alias");
 
     const Cell * aliasedCell = getValueFromAlias(alias);
     Cell * cell = nonNullCellAt(address);
 
     if (aliasedCell != 0 && cell != aliasedCell)
-        throw Base::Exception("Alias already defined.");
+        throw Base::ValueError("Alias already defined.");
 
     assert(cell != 0);
 
@@ -1079,15 +1079,38 @@ void PropertySheet::recomputeDependants(const Property *prop)
             std::string fullName = std::string(docName) + "#" + std::string(nameInDoc) + "." + std::string(name);
             std::map<std::string, std::set< CellAddress > >::const_iterator i = propertyNameToCellMap.find(fullName);
 
-            if (i == propertyNameToCellMap.end())
-                return;
+            if (i != propertyNameToCellMap.end()) {
+                std::set<CellAddress>::const_iterator j = i->second.begin();
+                std::set<CellAddress>::const_iterator end = i->second.end();
 
-            std::set<CellAddress>::const_iterator j = i->second.begin();
-            std::set<CellAddress>::const_iterator end = i->second.end();
+                while (j != end) {
+                    setDirty(*j);
+                    ++j;
+                }
+            }
+            else if (prop->isDerivedFrom(App::PropertyLists::getClassTypeId())) {
+                // #0003610:
+                // Inside propertyNameToCellMap we keep a string including the
+                // index operator of the property. From the given property we
+                // can't build 'fullName' to include this index, so we must go
+                // through all elements and check for a string of the form:
+                // 'fullName[index]' and set dirty the appropriate cells.
+                std::string fullNameIndex = "^";
+                fullNameIndex += fullName;
+                fullNameIndex += "\\[[0-9]+\\]$";
+                boost::regex rx(fullNameIndex);
+                boost::cmatch what;
+                for (auto i : propertyNameToCellMap) {
+                    if (boost::regex_match(i.first.c_str(), what, rx)) {
+                        std::set<CellAddress>::const_iterator j = i.second.begin();
+                        std::set<CellAddress>::const_iterator end = i.second.end();
 
-            while (j != end) {
-                setDirty(*j);
-                ++j;
+                        while (j != end) {
+                            setDirty(*j);
+                            ++j;
+                        }
+                    }
+                }
             }
         }
     }

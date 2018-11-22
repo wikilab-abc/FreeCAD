@@ -26,7 +26,6 @@
 #ifndef _PreComp_
 # include <assert.h>
 # include <string>
-# include <boost/signals.hpp>
 # include <boost/bind.hpp>
 # include <QApplication>
 # include <QString>
@@ -54,7 +53,7 @@ FC_LOG_LEVEL_INIT("Selection",false,true,true)
 using namespace Gui;
 using namespace std;
 
-SelectionObserver::SelectionObserver()
+SelectionObserver::SelectionObserver() : blockSelection(false)
 {
     attachSelection();
 }
@@ -66,17 +65,17 @@ SelectionObserver::~SelectionObserver()
 
 bool SelectionObserver::blockConnection(bool block)
 {
-    bool ok = connectSelection.blocked();
+    bool ok = blockSelection;
     if (block)
-        connectSelection.block();
+        blockSelection = true;
     else
-        connectSelection.unblock();
+        blockSelection = false;
     return ok;
 }
 
 bool SelectionObserver::isConnectionBlocked() const
 {
-    return connectSelection.blocked();
+    return blockSelection;
 }
 
 void SelectionObserver::attachSelection()
@@ -88,7 +87,9 @@ void SelectionObserver::attachSelection()
 }
 
 void SelectionObserver::_onSelectionChanged(const SelectionChanges& msg) {
-    try { 
+    try {
+        if (blockSelection)
+            return;
         onSelectionChanged(msg);
     } catch (Base::Exception &e) {
         e.ReportException();
@@ -739,12 +740,21 @@ bool SelectionSingleton::addSelection(const char* pDocName, const char* pObjectN
 
         temp.DocName  = pDocName;
         temp.FeatName = pObjectName ? pObjectName : "";
-        for (std::vector<std::string>::const_iterator it = pSubNames.begin(); it != pSubNames.end(); ++it) {
-            temp.SubName  = it->c_str();
+        if (!pSubNames.empty()) {
+            for (std::vector<std::string>::const_iterator it = pSubNames.begin(); it != pSubNames.end(); ++it) {
+                temp.SubName  = it->c_str();
+                temp.x        = 0;
+                temp.y        = 0;
+                temp.z        = 0;
+
+                _SelList.push_back(temp);
+            }
+        }
+        else {
+            temp.SubName  = "";
             temp.x        = 0;
             temp.y        = 0;
             temp.z        = 0;
-
             _SelList.push_back(temp);
         }
 
@@ -773,9 +783,42 @@ bool SelectionSingleton::addSelection(const char* pDocName, const char* pObjectN
     }
 }
 
+bool SelectionSingleton::addSelection(const SelectionObject& obj)
+{
+    const std::vector<std::string>& subNames = obj.getSubNames();
+    const std::vector<Base::Vector3d> points = obj.getPickedPoints();
+    if (!subNames.empty() && subNames.size() == points.size()) {
+        bool ok = true;
+        for (std::size_t i=0; i<subNames.size(); i++) {
+            const std::string& name = subNames[i];
+            const Base::Vector3d& pnt = points[i];
+            ok &= addSelection(obj.getDocName(), obj.getFeatName(), name.c_str(),
+                               static_cast<float>(pnt.x),
+                               static_cast<float>(pnt.y),
+                               static_cast<float>(pnt.z));
+        }
+        return ok;
+    }
+    else if (!subNames.empty()) {
+        bool ok = true;
+        for (std::size_t i=0; i<subNames.size(); i++) {
+            const std::string& name = subNames[i];
+            ok &= addSelection(obj.getDocName(), obj.getFeatName(), name.c_str());
+        }
+        return ok;
+    }
+    else {
+        return addSelection(obj.getDocName(), obj.getFeatName());
+    }
+}
+
 void SelectionSingleton::rmvSelection(const char* pDocName, const char* pObjectName, const char* pSubName)
 {
-    std::vector<SelectionChanges> rmvList;
+    bool foundSelection = false;
+    std::string tmpDocName;
+    std::string tmpFeaName;
+    std::string tmpSubName;
+    std::string tmpTypName;
 
     for (std::list<_SelObj>::iterator It = _SelList.begin();It != _SelList.end();) {
         if ((It->DocName == pDocName && !pObjectName) ||
@@ -783,25 +826,16 @@ void SelectionSingleton::rmvSelection(const char* pDocName, const char* pObjectN
             (It->DocName == pDocName && pObjectName && It->FeatName == pObjectName && pSubName && It->SubName == pSubName))
         {
             // save in tmp. string vars
-            std::string tmpDocName = It->DocName;
-            std::string tmpFeaName = It->FeatName;
-            std::string tmpSubName = It->SubName;
-            std::string tmpTypName = It->TypeName;
+            tmpDocName = It->DocName;
+            tmpFeaName = It->FeatName;
+            tmpSubName = It->SubName;
+            tmpTypName = It->TypeName;
 
             // destroy the _SelObj item
             It = _SelList.erase(It);
 
-            SelectionChanges Chng;
-            Chng.pDocName  = tmpDocName.c_str();
-            Chng.pObjectName = tmpFeaName.c_str();
-            Chng.pSubName  = tmpSubName.c_str();
-            Chng.pTypeName = tmpTypName.c_str();
-            Chng.Type      = SelectionChanges::RmvSelection;
+            foundSelection = true;
 
-            Notify(Chng);
-            signalSelectionChanged(Chng);
-
-            rmvList.push_back(Chng);
 #ifdef FC_DEBUG
             Base::Console().Log("Sel : Rmv Selection \"%s.%s.%s\"\n",pDocName,pObjectName,pSubName);
 #endif
@@ -809,6 +843,22 @@ void SelectionSingleton::rmvSelection(const char* pDocName, const char* pObjectN
         else {
             ++It;
         }
+    }
+
+    // NOTE: It can happen that there are nested calls of rmvSelection()
+    // so that it's not safe to invoke the notifications inside the loop
+    // as this can invalidate the iterators and thus leads to undefined
+    // behaviour.
+    // So, the notification is done after the loop, see also #0003469
+    if (foundSelection) {
+        SelectionChanges Chng;
+        Chng.pDocName  = tmpDocName.c_str();
+        Chng.pObjectName = tmpFeaName.c_str();
+        Chng.pSubName  = tmpSubName.c_str();
+        Chng.pTypeName = tmpTypName.c_str();
+        Chng.Type      = SelectionChanges::RmvSelection;
+        Notify(Chng);
+        signalSelectionChanged(Chng);
     }
 }
 

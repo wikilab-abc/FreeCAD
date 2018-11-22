@@ -319,11 +319,18 @@ CmdPartDesignClone::CmdPartDesignClone()
 void CmdPartDesignClone::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
+    std::string BodyName = getUniqueObjectName("Body");
     std::string FeatName = getUniqueObjectName("Clone");
     std::vector<App::DocumentObject*> objs = getSelection().getObjectsOfType
             (Part::Feature::getClassTypeId());
     if (objs.size() == 1) {
+        // As suggested in https://forum.freecadweb.org/viewtopic.php?f=3&t=25265&p=198547#p207336
+        // put the clone into its own new body.
+        // This also fixes bug #3447 because the clone is a PD feature and thus
+        // requires a body where it is part of.
         openCommand("Create Clone");
+        doCommand(Command::Doc,"App.ActiveDocument.addObject('PartDesign::Body','%s')",
+                  BodyName.c_str());
         doCommand(Command::Doc,"App.ActiveDocument.addObject('PartDesign::FeatureBase','%s')",
                   FeatName.c_str());
         doCommand(Command::Doc,"App.ActiveDocument.ActiveObject.BaseFeature = App.ActiveDocument.%s",
@@ -331,6 +338,12 @@ void CmdPartDesignClone::activated(int iMsg)
         doCommand(Command::Doc,"App.ActiveDocument.ActiveObject.Placement = App.ActiveDocument.%s.Placement",
                   objs.front()->getNameInDocument());
         doCommand(Command::Doc,"App.ActiveDocument.ActiveObject.setEditorMode('Placement',0)");
+        doCommand(Command::Doc,"App.ActiveDocument.%s.Group = [App.ActiveDocument.%s]",
+                  BodyName.c_str(), FeatName.c_str());
+
+        // Set the tip of the body
+        doCommand(Command::Doc,"App.ActiveDocument.%s.Tip = App.ActiveDocument.%s",
+                                BodyName.c_str(), FeatName.c_str());
         updateActive();
         doCommand(Command::Doc,"App.ActiveDocument.ActiveObject.ViewObject.DiffuseColor = App.ActiveDocument.%s.ViewObject.DiffuseColor",
                   objs.front()->getNameInDocument());
@@ -700,12 +713,7 @@ void finishFeature(const Gui::Command* cmd, const std::string& FeatName,
     if (updateDocument)
         cmd->updateActive();
 
-    // #0001721: use '0' as edit value to avoid switching off selection in
-    // ViewProviderGeometryObject::setEditViewer
-    cmd->doCommand(cmd->Gui,"Gui.activeDocument().setEdit('%s', 0)", FeatName.c_str());
-    cmd->doCommand(cmd->Gui,"Gui.Selection.clearSelection()");
-    //cmd->doCommand(cmd->Gui,"Gui.Selection.addSelection(App.ActiveDocument.ActiveObject)");
-
+    // Do this before calling setEdit to avoid to override the 'Shape preview' mode (#0003621)
     if (pcActiveBody) {
         cmd->copyVisual(FeatName.c_str(), "ShapeColor", pcActiveBody->getNameInDocument());
         cmd->copyVisual(FeatName.c_str(), "LineColor", pcActiveBody->getNameInDocument());
@@ -713,6 +721,12 @@ void finishFeature(const Gui::Command* cmd, const std::string& FeatName,
         cmd->copyVisual(FeatName.c_str(), "Transparency", pcActiveBody->getNameInDocument());
         cmd->copyVisual(FeatName.c_str(), "DisplayMode", pcActiveBody->getNameInDocument());
     }
+
+    // #0001721: use '0' as edit value to avoid switching off selection in
+    // ViewProviderGeometryObject::setEditViewer
+    cmd->doCommand(cmd->Gui,"Gui.activeDocument().setEdit('%s', 0)", FeatName.c_str());
+    cmd->doCommand(cmd->Gui,"Gui.Selection.clearSelection()");
+    //cmd->doCommand(cmd->Gui,"Gui.Selection.addSelection(App.ActiveDocument.ActiveObject)");
 }
 
 //===========================================================================
@@ -2113,10 +2127,19 @@ void CmdPartDesignMultiTransform::activated(int iMsg)
         openCommand("Convert to MultiTransform feature");
         doCommand(Gui, "FreeCADGui.runCommand('PartDesign_MoveTip')");
 
+        // We cannot remove the Transform feature from the body as otherwise
+        // we will have a PartDesign feature without a body which is not allowed
+        // and causes to pop up the migration dialog later when adding new features
+        // to the body.
+        // Additionally it creates the error message: "Links go out of the allowed scope"
+        // #0003509
+#if 0
         // Remove the Transformed feature from the Body
-        if(pcActiveBody)
+        if (pcActiveBody) {
             doCommand(Doc, "App.activeDocument().%s.removeObject(App.activeDocument().%s)",
                       pcActiveBody->getNameInDocument(), trFeat->getNameInDocument());
+        }
+#endif
 
         // Create a MultiTransform feature and move the Transformed feature inside it
         std::string FeatName = getUniqueObjectName("MultiTransform");

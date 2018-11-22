@@ -38,11 +38,11 @@
 #include <QImage>
 
 #include <Gui/Selection.h>
+#include <Gui/Namespace.h>
 
 class SoTranslation;
 class SoTransform;
 class SoText2;
-namespace Quarter = SIM::Coin3D::Quarter;
 
 class SoSeparator;
 class SoShapeHints;
@@ -55,6 +55,8 @@ class SoVectorizeAction;
 class QImage;
 class SoGroup;
 class NaviCube;
+
+namespace Quarter = SIM::Coin3D::Quarter;
 
 namespace Gui {
 
@@ -217,9 +219,9 @@ public:
     void startSelection(SelectionMode = Lasso);
     void stopSelection();
     bool isSelecting() const;
-    std::vector<SbVec2f> getGLPolygon(SbBool* clip_inner=0) const;
+    std::vector<SbVec2f> getGLPolygon(SelectionRole* role=0) const;
     std::vector<SbVec2f> getGLPolygon(const std::vector<SbVec2s>&) const;
-    const std::vector<SbVec2s>& getPolygon(SbBool* clip_inner=0) const;
+    const std::vector<SbVec2s>& getPolygon(SelectionRole* role=0) const;
     //@}
     
     /// Returns the screen coordinates of the origin of the path's tail object
@@ -347,6 +349,7 @@ public:
     void setEnabledNaviCube(bool b);
     bool isEnabledNaviCube(void) const;
     void setNaviCubeCorner(int);
+    NaviCube* getNavigationCube() const;
     void setEnabledVBO(bool b);
     bool isEnabledVBO() const;
 

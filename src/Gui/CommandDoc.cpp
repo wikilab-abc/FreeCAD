@@ -1100,8 +1100,9 @@ void StdCmdDelete::activated(int iMsg)
                         }
                         break;
                     }
-                } 
-            } else { 
+                }
+            }
+            else {
                 // check if we can delete the object - linked objects
                 std::set<QString> affectedLabels;
                 for (std::vector<Gui::SelectionObject>::iterator ft = sel.begin(); ft != sel.end(); ++ft) {
@@ -1120,8 +1121,8 @@ void StdCmdDelete::activated(int iMsg)
                         }
                     }
                 }
-                
-                //check for inactive objects in selection  Mantis #3477
+
+                //check for inactive objects in selection (Mantis #3477)
                 std::set<QString> inactiveLabels;
                 App::Application& app = App::GetApplication();
                 App::Document* actDoc = app.getActiveDocument();

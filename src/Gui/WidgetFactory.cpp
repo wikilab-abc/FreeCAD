@@ -116,6 +116,16 @@ using namespace Gui;
 
 #if defined (HAVE_SHIBOKEN)
 
+/**
+  Example:
+  \code
+    ui = FreeCADGui.UiLoader()
+    w = ui.createWidget("Gui::InputField")
+    w.show()
+    w.property("quantity")
+  \endcode
+  */
+
 PyObject* toPythonFuncQuantityTyped(Base::Quantity cpx) {
     return new Base::QuantityPy(new Base::Quantity(cpx));
 }
@@ -151,7 +161,7 @@ PythonToCppFunc isBaseQuantity_PythonToCpp_QVariantConvertible(PyObject* obj)
     return 0;
 }
 
-#if QT_VERSION >= 0x050200
+#if defined (HAVE_PYSIDE) && QT_VERSION >= 0x050200
 Base::Quantity convertWrapperToQuantity(const PySide::PyObjectWrapper &w)
 {
     PyObject* pyIn = static_cast<PyObject*>(w);
@@ -181,7 +191,7 @@ void registerTypes()
                                                              isBaseQuantity_PythonToCpp_QVariantConvertible);
     }
 
-#if QT_VERSION >= 0x050200
+#if defined (HAVE_PYSIDE) && QT_VERSION >= 0x050200
     QMetaType::registerConverter<PySide::PyObjectWrapper, Base::Quantity>(&convertWrapperToQuantity);
 #endif
 }
@@ -1437,7 +1447,7 @@ Py::Object PyResource::setValue(const Py::Tuple& args)
 #endif
                 continue;
 #if PY_MAJOR_VERSION >= 3
-            char* pItem = PyUnicode_AsUTF8(item);
+            const char* pItem = PyUnicode_AsUTF8(item);
 #else
             char* pItem = PyString_AsString(item);
 #endif

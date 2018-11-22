@@ -25,7 +25,7 @@
 
 #ifndef _PreComp_
 # include "InventorAll.h"
-# include <boost/signals.hpp>
+# include <boost/signals2.hpp>
 # include <boost/bind.hpp>
 # include <sstream>
 # include <stdexcept>
@@ -96,6 +96,7 @@
 #include "SplitView3DInventor.h"
 #include "View3DInventor.h"
 #include "ViewProvider.h"
+#include "ViewProviderDocumentObject.h"
 #include "ViewProviderExtension.h"
 #include "ViewProviderExtern.h"
 #include "ViewProviderFeature.h"
@@ -141,9 +142,9 @@ namespace Gui {
 // Pimpl class
 struct ApplicationP
 {
-    ApplicationP() : 
-    activeDocument(0L), 
-    isClosing(false), 
+    ApplicationP() :
+    activeDocument(0L),
+    isClosing(false),
     startingUp(true)
     {
         // create the macro manager
@@ -164,7 +165,7 @@ struct ApplicationP
     std::list<Gui::BaseView*> passive;
     bool isClosing;
     bool startingUp;
-    /// Handles all commands 
+    /// Handles all commands
     CommandManager commandManager;
 };
 
@@ -281,15 +282,6 @@ struct PyMethodDef FreeCADGui_methods[] = {
     {NULL, NULL, 0, NULL}  /* sentinel */
 };
 
-
-Gui::MDIView* Application::activeView(void) const
-{
-    if (activeDocument())
-        return activeDocument()->getActiveView();
-    else
-        return NULL;
-}
-
 } // namespace Gui
 
 Application::Application(bool GUIenabled)
@@ -310,11 +302,14 @@ Application::Application(bool GUIenabled)
         Translator::instance()->activateLanguage(hPGrp->GetASCII("Language", (const char*)lang.toLatin1()).c_str());
         GetWidgetFactorySupplier();
 
-        ParameterGrp::handle hUnits = App::GetApplication().GetParameterGroupByPath
-            ("User parameter:BaseApp/Preferences/Units");
-        Base::UnitsApi::setDecimals(hUnits->GetInt("Decimals", Base::UnitsApi::getDecimals()));
+        // Coin3d disabled VBO support for all Intel drivers but in the meantime they have improved
+        // so we can try to override the workaround by setting COIN_VBO
+        ParameterGrp::handle hViewGrp = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/View");
+        if (hViewGrp->GetBool("UseVBO",false)) {
+            (void)coin_setenv("COIN_VBO", "0", true);
+        }
 
-        // Check for the symbols for group separator and deciaml point. They must be different otherwise
+        // Check for the symbols for group separator and decimal point. They must be different otherwise
         // Qt doesn't work properly.
 #if defined(Q_OS_WIN32)
         if (QLocale::system().groupSeparator() == QLocale::system().decimalPoint()) {
@@ -351,7 +346,8 @@ Application::Application(bool GUIenabled)
 #if PY_MAJOR_VERSION >= 3
         // if this returns a valid pointer then the 'FreeCADGui' Python module was loaded,
         // otherwise the executable was launched
-        PyObject *module = PyImport_AddModule("FreeCADGui");
+        PyObject* modules = PyImport_GetModuleDict();
+        PyObject* module = PyDict_GetItemString(modules, "FreeCADGui");
         if (!module) {
             static struct PyModuleDef FreeCADGuiModuleDef = {
                 PyModuleDef_HEAD_INIT,
@@ -360,7 +356,8 @@ Application::Application(bool GUIenabled)
                 NULL, NULL, NULL, NULL
             };
             module = PyModule_Create(&FreeCADGuiModuleDef);
-            _PyImport_FixupBuiltin(module, "FreeCADGui");
+
+            PyDict_SetItemString(modules, "FreeCADGui", module);
         }
         else {
             // extend the method list
@@ -432,7 +429,7 @@ Application::Application(bool GUIenabled)
 
     d = new ApplicationP;
 
-    // global access 
+    // global access
     Instance = this;
 
     // instantiate the workbench dictionary
@@ -454,7 +451,7 @@ Application::~Application()
     BitmapFactoryInst::destruct();
 
 #if 0
-    // we must run the garbage collector before shutting down the SoDB 
+    // we must run the garbage collector before shutting down the SoDB
     // subsystem because we may reference some class objects of them in Python
     Base::Interpreter().cleanupSWIG("SoBase *");
     // finish also Inventor subsystem
@@ -560,14 +557,22 @@ void Application::importFrom(const char* FileName, const char* DocName, const ch
                     activeDocument()->setModified(false);
             }
             else {
-                Command::doCommand(Command::App, "%s.insert(u\"%s\",\"%s\")"
-                                               , Module, unicodepath.c_str(), DocName);
+                if (DocName) {
+                    Command::doCommand(Command::App, "%s.insert(u\"%s\",\"%s\")"
+                                                   , Module, unicodepath.c_str(), DocName);
+                }
+                else {
+                    Command::doCommand(Command::App, "%s.insert(u\"%s\")"
+                                                   , Module, unicodepath.c_str());
+                }
                 ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath
                     ("User parameter:BaseApp/Preferences/View");
                 if (hGrp->GetBool("AutoFitToView", true))
                     Command::doCommand(Command::Gui, "Gui.SendMsgToActiveView(\"ViewFit\")");
-                if (getDocument(DocName))
-                    getDocument(DocName)->setModified(true);
+                Gui::Document* doc = activeDocument();
+                if (DocName) doc = getDocument(DocName);
+                if (doc)
+                    doc->setModified(true);
             }
 
             // the original file name is required
@@ -676,8 +681,9 @@ void Application::slotNewDocument(const App::Document& Doc)
     pDoc->signalChangedObject.connect(boost::bind(&Gui::Application::slotChangedObject, this, _1, _2));
     pDoc->signalRelabelObject.connect(boost::bind(&Gui::Application::slotRelabelObject, this, _1));
     pDoc->signalActivatedObject.connect(boost::bind(&Gui::Application::slotActivatedObject, this, _1));
-
-
+    pDoc->signalInEdit.connect(boost::bind(&Gui::Application::slotInEdit, this, _1));
+    pDoc->signalResetEdit.connect(boost::bind(&Gui::Application::slotResetEdit, this, _1));
+ 
     signalNewDocument(*pDoc);
     pDoc->createView(View3DInventor::getClassTypeId());
     // FIXME: Do we really need this further? Calling processEvents() mixes up order of execution in an
@@ -700,7 +706,7 @@ void Application::slotDeleteDocument(const App::Document& Doc)
     doc->second->signalDeleteDocument(*doc->second);
     signalDeleteDocument(*doc->second);
 
-    // If the active document gets destructed we must set it to 0. If there are further existing documents then the 
+    // If the active document gets destructed we must set it to 0. If there are further existing documents then the
     // view that becomes active sets the active document again. So, we needn't worry about this.
     if (d->activeDocument == doc->second)
         setActiveDocument(0);
@@ -779,6 +785,16 @@ void Application::slotActivatedObject(const ViewProvider& vp)
     this->signalActivatedObject(vp);
 }
 
+void Application::slotInEdit(const Gui::ViewProviderDocumentObject& vp)
+{
+    this->signalInEdit(vp);
+}
+
+void Application::slotResetEdit(const Gui::ViewProviderDocumentObject& vp)
+{
+    this->signalResetEdit(vp);
+}
+
 void Application::onLastWindowClosed(Gui::Document* pcDoc)
 {
     if (!d->isClosing && pcDoc) {
@@ -809,6 +825,37 @@ bool Application::sendHasMsgToActiveView(const char* pMsg)
     return pView ? pView->onHasMsg(pMsg) : false;
 }
 
+Gui::MDIView* Application::activeView(void) const
+{
+    if (activeDocument())
+        return activeDocument()->getActiveView();
+    else
+        return NULL;
+}
+
+/**
+ * @brief Application::activateView
+ * Activates a view of the given type of the active document.
+ * If a view of this type doesn't exist and \a create is true
+ * a new view of this type will be created.
+ * @param type
+ * @param create
+ */
+void Application::activateView(const Base::Type& type, bool create)
+{
+    Document* doc = activeDocument();
+    if (doc) {
+        MDIView* mdiView = doc->getActiveView();
+        if (mdiView && mdiView->isDerivedFrom(type))
+            return;
+        std::list<MDIView*> mdiViews = doc->getMDIViewsOfType(type);
+        if (!mdiViews.empty())
+            doc->setActiveWindow(mdiViews.back());
+        else if (create)
+            doc->createView(type);
+    }
+}
+
 /// Getter for the active view
 Gui::Document* Application::activeDocument(void) const
 {
@@ -829,19 +876,19 @@ void Application::setActiveDocument(Gui::Document* pcDocument)
     }
     d->activeDocument = pcDocument;
     std::string nameApp, nameGui;
- 
+
     // This adds just a line to the macro file but does not set the active document
     // Macro recording of this is problematic, thus it's written out as comment.
     if (pcDocument){
         nameApp += "App.setActiveDocument(\"";
-        nameApp += pcDocument->getDocument()->getName(); 
+        nameApp += pcDocument->getDocument()->getName();
         nameApp +=  "\")\n";
         nameApp += "App.ActiveDocument=App.getDocument(\"";
-        nameApp += pcDocument->getDocument()->getName(); 
+        nameApp += pcDocument->getDocument()->getName();
         nameApp +=  "\")";
         macroManager()->addLine(MacroManager::Cmt,nameApp.c_str());
         nameGui += "Gui.ActiveDocument=Gui.getDocument(\"";
-        nameGui += pcDocument->getDocument()->getName(); 
+        nameGui += pcDocument->getDocument()->getName();
         nameGui +=  "\")";
         macroManager()->addLine(MacroManager::Cmt,nameGui.c_str());
     }
@@ -1025,10 +1072,10 @@ void Application::tryClose(QCloseEvent * e)
  * Activate the matching workbench to the registered workbench handler with name \a name.
  * The handler must be an instance of a class written in Python.
  * Normally, if a handler gets activated a workbench with the same name gets created unless it
- * already exists. 
+ * already exists.
  *
  * The old workbench gets deactivated before. If the workbench to the handler is already
- * active or if the switch fails false is returned. 
+ * active or if the switch fails false is returned.
  */
 bool Application::activateWorkbench(const char* name)
 {
@@ -1146,7 +1193,7 @@ bool Application::activateWorkbench(const char* name)
         Base::Console().Error("%s\n", e.getStackTrace().c_str());
         if (!d->startingUp) {
             wc.restoreCursor();
-            QMessageBox::critical(getMainWindow(), QObject::tr("Workbench failure"), 
+            QMessageBox::critical(getMainWindow(), QObject::tr("Workbench failure"),
                 QObject::tr("%1").arg(msg));
             wc.setWaitCursor();
         }
@@ -1287,13 +1334,13 @@ QStringList Application::workbenches(void) const
     std::map<std::string, std::string>::const_iterator st = config.find("StartWorkbench");
     const char* start = (st != config.end() ? st->second.c_str() : "<none>");
     QStringList hidden, extra;
-    if (ht != config.end()) { 
+    if (ht != config.end()) {
         QString items = QString::fromLatin1(ht->second.c_str());
         hidden = items.split(QLatin1Char(';'), QString::SkipEmptyParts);
         if (hidden.isEmpty())
             hidden.push_back(QLatin1String(""));
     }
-    if (et != config.end()) { 
+    if (et != config.end()) {
         QString items = QString::fromLatin1(et->second.c_str());
         extra = items.split(QLatin1Char(';'), QString::SkipEmptyParts);
         if (extra.isEmpty())
@@ -1319,7 +1366,7 @@ QStringList Application::workbenches(void) const
         if (!hidden.isEmpty()&&ok) {
             ok = (hidden.indexOf(QString::fromLatin1(wbName)) == -1);
         }
-    
+
         // okay the item is visible
         if (ok)
             wb.push_back(QString::fromLatin1(wbName));
@@ -1335,7 +1382,7 @@ void Application::setupContextMenu(const char* recipient, MenuItem* items) const
 {
     Workbench* actWb = WorkbenchManager::instance()->active();
     if (actWb) {
-        // when populating the context-menu of a Python workbench invoke the method 
+        // when populating the context-menu of a Python workbench invoke the method
         // 'ContextMenu' of the handler object
         if (actWb->getTypeId().isDerivedFrom(PythonWorkbench::getClassTypeId())) {
             static_cast<PythonWorkbench*>(actWb)->clearContextMenu();
@@ -1537,7 +1584,7 @@ void Application::initTypes(void)
     Gui::ViewProviderGroupExtension             ::init();
     Gui::ViewProviderGroupExtensionPython       ::init();
     Gui::ViewProviderGeoFeatureGroupExtension   ::init();
-    Gui::ViewProviderGeoFeatureGroupExtensionPython::init();    
+    Gui::ViewProviderGeoFeatureGroupExtensionPython::init();
     Gui::ViewProviderOriginGroupExtension       ::init();
     Gui::ViewProviderOriginGroupExtensionPython ::init();
     Gui::ViewProviderExtern                     ::init();

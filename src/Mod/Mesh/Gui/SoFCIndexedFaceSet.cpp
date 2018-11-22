@@ -106,7 +106,7 @@ bool MeshRenderer::Private::canRenderGLArray(SoGLRenderAction *action) const
     static bool init = false;
     static bool vboAvailable = false;
     if (!init) {
-        vboAvailable = Gui::OpenGLBuffer::isVBOSupported();
+        vboAvailable = Gui::OpenGLBuffer::isVBOSupported(action->getCacheContext());
         if (!vboAvailable) {
             SoDebugError::postInfo("MeshRenderer",
                                    "GL_ARB_vertex_buffer_object extension not supported");
@@ -576,6 +576,13 @@ void SoFCIndexedFaceSet::drawFaces(SoGLRenderAction *action)
 
         drawCoords(static_cast<const SoGLCoordinateElement*>(coords), cindices, numindices,
                    normals, nindices, &mb, mindices, binding, &tb, tindices);
+
+        // getVertexData() internally calls readLockNormalCache() that read locks
+        // the normal cache. When the cache is not needed any more we must call
+        // readUnlockNormalCache()
+        if (normalCacheUsed)
+            this->readUnlockNormalCache();
+
         // Disable caching for this node
         SoGLCacheContextElement::shouldAutoCache(state, SoGLCacheContextElement::DONT_AUTO_CACHE);
 #endif
@@ -721,7 +728,7 @@ void SoFCIndexedFaceSet::generateGLArrays(SoGLRenderAction * action)
             // the nindices must have the length of numindices
             int32_t vertex = 0;
             int index = 0;
-            float t = transp[0];
+            float t = transp ? transp[0] : 0;
             for (std::size_t i=0; i<numTria; i++) {
                 const SbColor& c = pcolors[i];
                 for (int j=0; j<3; j++) {
@@ -759,7 +766,7 @@ void SoFCIndexedFaceSet::generateGLArrays(SoGLRenderAction * action)
             // the nindices must have the length of numindices
             int32_t vertex = 0;
             int index = 0;
-            float t = transp[0];
+            float t = transp ? transp[0] : 0;
             for (std::size_t i=0; i<numTria; i++) {
                 for (int j=0; j<3; j++) {
                     const SbColor& c = pcolors[mindices[index]];
@@ -847,6 +854,12 @@ void SoFCIndexedFaceSet::generateGLArrays(SoGLRenderAction * action)
     }
 
     render.generateGLArrays(action, matbind, face_vertices, face_indices);
+
+    // getVertexData() internally calls readLockNormalCache() that read locks
+    // the normal cache. When the cache is not needed any more we must call
+    // readUnlockNormalCache()
+    if (normalCacheUsed)
+        this->readUnlockNormalCache();
 }
 
 void SoFCIndexedFaceSet::doAction(SoAction * action)

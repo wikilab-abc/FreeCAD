@@ -53,6 +53,9 @@ PropertyEditor::PropertyEditor(QWidget *parent)
     QStyleOptionViewItem opt = viewOptions();
     this->background = opt.palette.dark();
     this->groupColor = opt.palette.color(QPalette::BrightText);
+
+    connect(this, SIGNAL(activated(QModelIndex)), this, SLOT(onItemActivated(QModelIndex)));
+    connect(this, SIGNAL(clicked(QModelIndex)), this, SLOT(onItemActivated(QModelIndex)));
 }
 
 PropertyEditor::~PropertyEditor()
@@ -100,8 +103,18 @@ void PropertyEditor::closeEditor (QWidget * editor, QAbstractItemDelegate::EndEd
 {
     if (autoupdate) {
         App::Document* doc = App::GetApplication().getActiveDocument();
-        if (doc && doc->isTouched())
-            doc->recompute();
+        if (doc) {
+            if (!doc->isTransactionEmpty()) {
+                doc->commitTransaction();
+                // Between opening and committing a transaction a recompute
+                // could already have been done
+                if (doc->isTouched())
+                    doc->recompute();
+            }
+            else {
+                doc->abortTransaction();
+            }
+        }
     }
     QTreeView::closeEditor(editor, hint);
 }
@@ -127,8 +140,24 @@ void PropertyEditor::currentChanged ( const QModelIndex & current, const QModelI
     QTreeView::currentChanged(current, previous);
     if (previous.isValid())
         closePersistentEditor(model()->buddy(previous));
-    if (current.isValid())
-        openPersistentEditor(model()->buddy(current));
+
+    // DO NOT activate editor here, use onItemActivate() which response to
+    // signals of activated and clicked.
+    //
+    // if (current.isValid())
+    //     openPersistentEditor(model()->buddy(current));
+}
+
+void PropertyEditor::onItemActivated ( const QModelIndex & index )
+{
+    if (autoupdate) {
+        PropertyItem* property = static_cast<PropertyItem*>(index.internalPointer());
+        QString edit = tr("Edit %1").arg(property->propertyName());
+        App::Document* doc = App::GetApplication().getActiveDocument();
+        if (doc)
+            doc->openTransaction(edit.toUtf8());
+    }
+    openPersistentEditor(model()->buddy(index));
 }
 
 void PropertyEditor::reset()

@@ -31,6 +31,7 @@ import PathScripts.PathLog as PathLog
 import PathScripts.PathOp as PathOp
 import PathScripts.PathPreferences as PathPreferences
 import PathScripts.PathSelection as PathSelection
+import PathScripts.PathSetupSheet as PathSetupSheet
 import PathScripts.PathUtil as PathUtil
 import PathScripts.PathUtils as PathUtils
 import importlib
@@ -71,6 +72,7 @@ class ViewProvider(object):
 
     def attach(self, vobj):
         PathLog.track()
+        self.vobj = vobj
         self.Object = vobj.Object
         self.panel = None
         return
@@ -83,16 +85,21 @@ class ViewProvider(object):
         PathLog.track()
         return hasattr(self, 'deleteOnReject') and self.deleteOnReject
 
-    def setEdit(self, vobj, mode=0):
+    def setEdit(self, vobj=None, mode=0):
         '''setEdit(vobj, mode=0) ... initiate editing of receivers model.'''
         PathLog.track()
-        page = self.getTaskPanelOpPage(vobj.Object)
-        page.setTitle(self.OpName)
-        page.setIcon(self.OpIcon)
-        selection = self.getSelectionFactory()
-        self.setupTaskPanel(TaskPanel(vobj.Object, self.deleteObjectsOnReject(), page, selection))
-        self.deleteOnReject = False
-        return True
+        if 0 == mode:
+            if vobj is None:
+                vobj = self.vobj
+            page = self.getTaskPanelOpPage(vobj.Object)
+            page.setTitle(self.OpName)
+            page.setIcon(self.OpIcon)
+            selection = self.getSelectionFactory()
+            self.setupTaskPanel(TaskPanel(vobj.Object, self.deleteObjectsOnReject(), page, selection))
+            self.deleteOnReject = False
+            return True
+        # no other editing possible
+        return False
 
     def setupTaskPanel(self, panel):
         '''setupTaskPanel(panel) ... internal function to start the editor.'''
@@ -161,6 +168,13 @@ class ViewProvider(object):
         PathUtil.clearExpressionEngine(vobj.Object)
         return True
 
+    def setupContextMenu(self, vobj, menu):
+        PathLog.track()
+        for action in menu.actions():
+            menu.removeAction(action)
+        action = QtGui.QAction(translate('Path', 'Edit'), menu)
+        action.triggered.connect(self.setEdit)
+        menu.addAction(action)
 
 class TaskPanelPage(object):
     '''Base class for all task panel pages.'''
@@ -380,20 +394,15 @@ class TaskPanelBaseGeometryPage(TaskPanelPage):
             return 'edges'
         return 'nothing'
 
-    def addBaseGeometry(self, selection):
-        PathLog.track(selection)
-        if len(selection) != 1:
-            PathLog.error(translate("PathProject", "Please select %s from a single solid" % self.featureName()))
-            return False
-        sel = selection[0]
+    def addBaseGeometrySelection(self, sel):
         if sel.HasSubObjects:
-            if not self.supportsVertexes() and selection[0].SubObjects[0].ShapeType == "Vertex":
+            if not self.supportsVertexes() and sel.SubObjects[0].ShapeType == "Vertex":
                 PathLog.error(translate("PathProject", "Vertexes are not supported"))
                 return False
-            if not self.supportsEdges() and selection[0].SubObjects[0].ShapeType == "Edge":
+            if not self.supportsEdges() and sel.SubObjects[0].ShapeType == "Edge":
                 PathLog.error(translate("PathProject", "Edges are not supported"))
                 return False
-            if not self.supportsFaces() and selection[0].SubObjects[0].ShapeType == "Face":
+            if not self.supportsFaces() and sel.SubObjects[0].ShapeType == "Face":
                 PathLog.error(translate("PathProject", "Faces are not supported"))
                 return False
         else:
@@ -404,6 +413,17 @@ class TaskPanelBaseGeometryPage(TaskPanelPage):
         for sub in sel.SubElementNames:
             self.obj.Proxy.addBase(self.obj, sel.Object, sub)
         return True
+
+    def addBaseGeometry(self, selection):
+        PathLog.track(selection)
+        #if len(selection) != 1:
+        #    PathLog.error(translate("PathProject", "Please select %s from a single solid" % self.featureName()))
+        #    return False
+        changed = False
+        for sel in selection:
+            if self.addBaseGeometrySelection(sel):
+                changed = True
+        return changed
 
     def addBase(self):
         if self.addBaseGeometry(FreeCADGui.Selection.getSelectionEx()):
@@ -595,23 +615,42 @@ class TaskPanelDepthsPage(TaskPanelPage):
     def getForm(self):
         return FreeCADGui.PySideUic.loadUi(":/panels/PageDepthsEdit.ui")
 
+    def haveStartDepth(self):
+        return PathOp.FeatureDepths & self.features
+    def haveFinalDepth(self):
+        return PathOp.FeatureDepths & self.features and not PathOp.FeatureNoFinalDepth & self.features
+    def haveFinishDepth(self):
+        return PathOp.FeatureDepths & self.features and PathOp.FeatureFinishDepth & self.features
+    def haveStepDown(self):
+        return PathOp.FeatureStepDown & self. features
+
     def initPage(self, obj):
-        self.startDepth = PathGui.QuantitySpinBox(self.form.startDepth, obj, 'StartDepth')
 
-        if PathOp.FeatureNoFinalDepth & self.features:
-            self.form.finalDepth.setEnabled(False)
-            self.form.finalDepth.setToolTip(translate('PathOp', 'FinalDepth cannot be modified for this operation.\nIf it is necessary to set the FinalDepth manually please select a different operation.'))
-            self.form.finalDepthSet.hide()
+        if self.haveStartDepth():
+            self.startDepth = PathGui.QuantitySpinBox(self.form.startDepth, obj, 'StartDepth')
         else:
-            self.finalDepth = PathGui.QuantitySpinBox(self.form.finalDepth, obj, 'FinalDepth')
+            self.form.startDepth.hide()
+            self.form.startDepthLabel.hide()
+            self.form.startDepthSet.hide()
 
-        if PathOp.FeatureStepDown & self.features:
+        if self.haveFinalDepth():
+            self.finalDepth = PathGui.QuantitySpinBox(self.form.finalDepth, obj, 'FinalDepth')
+        else:
+            if self.haveStartDepth():
+                self.form.finalDepth.setEnabled(False)
+                self.form.finalDepth.setToolTip(translate('PathOp', 'FinalDepth cannot be modified for this operation.\nIf it is necessary to set the FinalDepth manually please select a different operation.'))
+            else:
+                self.form.finalDepth.hide()
+                self.form.finalDepthLabel.hide()
+            self.form.finalDepthSet.hide()
+
+        if self.haveStepDown():
             self.stepDown = PathGui.QuantitySpinBox(self.form.stepDown, obj, 'StepDown')
         else:
             self.form.stepDown.hide()
             self.form.stepDownLabel.hide()
 
-        if PathOp.FeatureFinishDepth & self.features:
+        if self.haveFinishDepth():
             self.finishDepth = PathGui.QuantitySpinBox(self.form.finishDepth, obj, 'FinishDepth')
         else:
             self.form.finishDepth.hide()
@@ -621,38 +660,42 @@ class TaskPanelDepthsPage(TaskPanelPage):
         return translate("PathOp", "Depths")
 
     def getFields(self, obj):
-        self.startDepth.updateProperty()
-        if not PathOp.FeatureNoFinalDepth & self.features:
+        if self.haveStartDepth():
+            self.startDepth.updateProperty()
+        if self.haveFinalDepth():
             self.finalDepth.updateProperty()
-        if PathOp.FeatureStepDown & self.features:
+        if self.haveStepDown():
             self.stepDown.updateProperty()
-        if PathOp.FeatureFinishDepth & self.features:
+        if self.haveFinishDepth():
             self.finishDepth.updateProperty()
 
     def setFields(self, obj):
-        self.startDepth.updateSpinBox()
-        if not PathOp.FeatureNoFinalDepth & self.features:
+        if self.haveStartDepth():
+            self.startDepth.updateSpinBox()
+        if self.haveFinalDepth():
             self.finalDepth.updateSpinBox()
-        if PathOp.FeatureStepDown & self.features:
+        if self.haveStepDown():
             self.stepDown.updateSpinBox()
-        if PathOp.FeatureFinishDepth & self.features:
+        if self.haveFinishDepth():
             self.finishDepth.updateSpinBox()
         self.updateSelection(obj, FreeCADGui.Selection.getSelectionEx())
 
     def getSignalsForUpdate(self, obj):
         signals = []
-        signals.append(self.form.startDepth.editingFinished)
-        if not PathOp.FeatureNoFinalDepth & self.features:
+        if self.haveStartDepth():
+            signals.append(self.form.startDepth.editingFinished)
+        if self.haveFinalDepth():
             signals.append(self.form.finalDepth.editingFinished)
-        if PathOp.FeatureStepDown & self.features:
+        if self.haveStepDown():
             signals.append(self.form.stepDown.editingFinished)
-        if PathOp.FeatureFinishDepth & self.features:
+        if self.haveFinishDepth():
             signals.append(self.form.finishDepth.editingFinished)
         return signals
 
     def registerSignalHandlers(self, obj):
-        self.form.startDepthSet.clicked.connect(lambda: self.depthSet(obj, self.startDepth, 'StartDepth'))
-        if not PathOp.FeatureNoFinalDepth & self.features:
+        if self.haveStartDepth():
+            self.form.startDepthSet.clicked.connect(lambda: self.depthSet(obj, self.startDepth, 'StartDepth'))
+        if self.haveFinalDepth():
             self.form.finalDepthSet.clicked.connect(lambda: self.depthSet(obj, self.finalDepth, 'FinalDepth'))
 
     def pageUpdateData(self, obj, prop):
@@ -724,7 +767,7 @@ class TaskPanel(object):
             else:
                 self.featurePages.append(TaskPanelBaseLocationPage(obj, features))
 
-        if PathOp.FeatureDepths & features:
+        if PathOp.FeatureDepths & features or PathOp.FeatureStepDown:
             if hasattr(opPage, 'taskPanelDepthsPage'):
                 self.featurePages.append(opPage.taskPanelDepthsPage(obj, features))
             else:
@@ -870,11 +913,10 @@ class TaskPanel(object):
 
         if self.deleteOnReject and PathOp.FeatureBaseGeometry & self.obj.Proxy.opFeatures(self.obj):
             sel = FreeCADGui.Selection.getSelectionEx()
-            if len(sel) == 1 and sel[0].Object != self.obj:
-                for page in self.featurePages:
-                    if hasattr(page, 'addBase'):
-                        page.clearBase()
-                        page.addBaseGeometry(sel)
+            for page in self.featurePages:
+                if hasattr(page, 'addBase'):
+                    page.clearBase()
+                    page.addBaseGeometry(sel)
 
         self.panelSetFields()
         for page in self.featurePages:
@@ -945,7 +987,7 @@ def Create(res):
         vobj = ViewProvider(obj.ViewObject, res)
 
         FreeCAD.ActiveDocument.commitTransaction()
-        obj.ViewObject.startEditing()
+        obj.ViewObject.Document.setEdit(obj.ViewObject, 0)
         return obj
     FreeCAD.ActiveDocument.abortTransaction()
     return None
@@ -996,8 +1038,8 @@ def SetupOperation(name,
                    pixmap,
                    menuText,
                    toolTip,
-                   accelKey=None):
-    '''SetupOperation(name, objFactory, opPageClass, pixmap, menuText, toolTip, accelKey=None)
+                   setupProperties=None):
+    '''SetupOperation(name, objFactory, opPageClass, pixmap, menuText, toolTip, setupProperties=None)
     Creates an instance of CommandPathOp with the given parameters and registers the command with FreeCAD.
     When activated it creates a model with proxy (by invoking objFactory), assigns a view provider to it
     (see ViewProvider in this module) and starts the editor specifically for this operation (driven by opPageClass).
@@ -1005,10 +1047,14 @@ def SetupOperation(name,
     It is not expected to be called manually.
     '''
 
-    res = CommandResources(name, objFactory, opPageClass, pixmap, menuText, accelKey, toolTip)
+    res = CommandResources(name, objFactory, opPageClass, pixmap, menuText, None, toolTip)
 
     command = CommandPathOp(res)
     FreeCADGui.addCommand("Path_%s" % name.replace(' ', '_'), command)
+
+    if not setupProperties is None:
+        PathSetupSheet.RegisterOperation(name, objFactory, setupProperties)
+
     return command
 
 
