@@ -27,6 +27,8 @@
 #endif
 
 #include <gp_Ax2.hxx>
+#include <gp_Ax3.hxx>
+#include <gp_Trsf.hxx>
 #include <Base/Console.h>
 #include <Base/Writer.h>
 
@@ -63,10 +65,11 @@ DrawProjGroupItem::DrawProjGroupItem(void)
     ADD_PROPERTY_TYPE(RotationVector ,(1.0,0.0,0.0)    ,"Base",App::Prop_None,"Controls rotation of item in view. ");
 
     //projection group controls these
-    Direction.setStatus(App::Property::ReadOnly,true);
-    RotationVector.setStatus(App::Property::ReadOnly,true);
-    Scale.setStatus(App::Property::Hidden,true);
-    ScaleType.setStatus(App::Property::Hidden,true);
+//    Direction.setStatus(App::Property::ReadOnly,true);
+//    RotationVector.setStatus(App::Property::ReadOnly,true);
+    Scale.setStatus(App::Property::ReadOnly,true);
+    ScaleType.setValue("Custom");
+    ScaleType.setStatus(App::Property::ReadOnly,true);
 }
 
 short DrawProjGroupItem::mustExecute() const
@@ -75,7 +78,8 @@ short DrawProjGroupItem::mustExecute() const
     if (!isRestoring()) {
         result  =  (Direction.isTouched()  ||
                     RotationVector.isTouched() ||
-                    Source.isTouched()  );
+                    Source.isTouched()  ||
+                    Scale.isTouched());
     }
 
     if (result) {
@@ -96,12 +100,16 @@ DrawProjGroupItem::~DrawProjGroupItem()
 
 App::DocumentObjectExecReturn *DrawProjGroupItem::execute(void)
 {
+    if (DrawUtil::checkParallel(Direction.getValue(),
+                                RotationVector.getValue())) {
+        return new App::DocumentObjectExecReturn("DPGI: Direction and RotationVector are parallel");
+    }
+
     App::DocumentObjectExecReturn * ret = DrawViewPart::execute();
     delete ret;
 
     autoPosition();
     requestPaint();
-
     return App::DocumentObject::StdReturn;
 }
 
@@ -109,16 +117,15 @@ void DrawProjGroupItem::autoPosition()
 {
     auto pgroup = getPGroup();
     Base::Vector3d newPos;
-    if (isAnchor()) {
-        X.setValue(0.0);
-        Y.setValue(0.0);
-    } else if ((pgroup != nullptr) && 
+    if ((pgroup != nullptr) && 
         (pgroup->AutoDistribute.getValue()) &&
         (!LockPosition.getValue())) {
         newPos = pgroup->getXYPosition(Type.getValueAsString());
         X.setValue(newPos.x);
         Y.setValue(newPos.y);
     }
+    requestPaint();
+    purgeTouched();
 }
 
 void DrawProjGroupItem::onDocumentRestored()
@@ -155,22 +162,37 @@ bool DrawProjGroupItem::isAnchor(void)
     return result;
 }
 
+/// get a coord system aligned with Direction and Rotation Vector
 gp_Ax2 DrawProjGroupItem::getViewAxis(const Base::Vector3d& pt,
                                  const Base::Vector3d& axis, 
                                  const bool flip) const
 {
-     gp_Ax2 viewAxis;
-     Base::Vector3d x = RotationVector.getValue();
-     Base::Vector3d nx = x;
-     x.Normalize();
-     Base::Vector3d na = axis;
-     na.Normalize();
-     viewAxis = TechDrawGeometry::getViewAxis(pt,axis,flip);        //default orientation
+    (void) flip;
+    gp_Ax2 viewAxis;
+    Base::Vector3d projDir = Direction.getValue();
+    Base::Vector3d rotVec  = RotationVector.getValue();
 
-     if (!DrawUtil::checkParallel(nx,na)) {                         //!parallel/antiparallel
-         viewAxis = TechDrawGeometry::getViewAxis(pt,axis,x,flip);
-     }
-     return viewAxis;
+// mirror projDir through XZ plane
+    Base::Vector3d yNorm(0.0,1.0,0.0);
+    projDir = projDir - (yNorm * 2.0) * (projDir.Dot(yNorm));
+    rotVec = rotVec - (yNorm * 2.0) * (rotVec.Dot(yNorm));
+
+    if (DrawUtil::checkParallel(projDir,rotVec)) {
+         Base::Console().Warning("DPGI::getVA - %s - Direction and RotationVector parallel. using defaults\n",
+                                 getNameInDocument());
+    }
+    try {
+        viewAxis = gp_Ax2(gp_Pnt(pt.x,pt.y,pt.z),
+                          gp_Dir(projDir.x, projDir.y, projDir.z),
+                          gp_Dir(rotVec.x, rotVec.y, rotVec.z));
+    }
+    catch (Standard_Failure& e4) {
+        Base::Console().Message("PROBLEM - DPGI (%s) failed to create viewAxis: %s **\n",
+                                getNameInDocument(),e4.GetMessageString());
+        return TechDrawGeometry::getViewAxis(pt,axis,false);
+    }
+
+    return viewAxis;
 }
 
 //obs??

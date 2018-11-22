@@ -102,7 +102,7 @@ Part::Feature* Transformed::getBaseObject(bool silent) const {
     }
 
     if (!silent && err) {
-        throw Base::Exception(err);
+        throw Base::RuntimeError(err);
     }
 
     return rv;
@@ -401,7 +401,7 @@ TopoDS_Shape Transformed::refineShapeIfActive(const TopoDS_Shape& oldShape) cons
             TopoDS_Shape resShape = mkRefine.Shape();
             return resShape;
         }
-        catch (Standard_Failure) {
+        catch (Standard_Failure&) {
             return oldShape;
         }
     }

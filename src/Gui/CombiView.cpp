@@ -64,10 +64,7 @@ CombiView::CombiView(Gui::Document* pcDocument, QWidget *parent)
     splitter->setOrientation(Qt::Vertical);
 
     // tree widget
-    tree =  new TreeWidget(this);
-    //tree->setRootIsDecorated(false);
-    ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/TreeView");
-    tree->setIndentation(hGrp->GetInt("Indentation", tree->indentation()));
+    tree =  new TreePanel(this);
     splitter->addWidget(tree);
 
     // property view
@@ -90,9 +87,12 @@ CombiView::~CombiView()
 
 void CombiView::showDialog(Gui::TaskView::TaskDialog *dlg)
 {
+    static QIcon icon = Gui::BitmapFactory().pixmap("edit-edit.svg");
+
     // switch to the TaskView tab
     oldTabIndex = tabs->currentIndex();
     tabs->setCurrentIndex(1);
+    tabs->setTabIcon(1, icon);
     // set the dialog
     taskPanel->showDialog(dlg);
 }
@@ -105,8 +105,11 @@ void CombiView::closeDialog()
 
 void CombiView::closedDialog()
 {
+    static QIcon icon = QIcon();
+
     // dialog has been closed
     tabs->setCurrentIndex(oldTabIndex);
+    tabs->setTabIcon(1, icon);
 }
 
 void CombiView::showTreeView()

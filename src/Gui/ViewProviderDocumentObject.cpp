@@ -33,6 +33,7 @@
 #endif
 
 /// Here the FreeCAD includes sorted by Base,App,Gui......
+#include <Base/Tools.h>
 #include <Base/Console.h>
 #include <App/Material.h>
 #include <App/DocumentObjectGroup.h>
@@ -156,6 +157,11 @@ void ViewProviderDocumentObject::show(void)
 
 void ViewProviderDocumentObject::updateView()
 {
+    if(testStatus(ViewStatus::UpdatingView))
+        return;
+
+    Base::ObjectStatusLocker<ViewStatus,ViewProviderDocumentObject> lock(ViewStatus::UpdatingView,this);
+
     std::map<std::string, App::Property*> Map;
     pcObject->getPropertyMap(Map);
 
@@ -191,10 +197,10 @@ void ViewProviderDocumentObject::attach(App::DocumentObject *pcObj)
     const char* defmode = this->getDefaultDisplayMode();
     if (defmode)
         DisplayMode.setValue(defmode);
-    
+
     //attach the extensions
     auto vector = getExtensionsDerivedFromType<Gui::ViewProviderExtension>();
-    for(Gui::ViewProviderExtension* ext : vector)
+    for (Gui::ViewProviderExtension* ext : vector)
         ext->extensionAttach(pcObj);
 }
 
@@ -278,7 +284,7 @@ SoNode* ViewProviderDocumentObject::findFrontRootOfType(const SoType& type) cons
 
 void ViewProviderDocumentObject::setActiveMode()
 {
-    if (DisplayMode.getEnums()) {
+    if (DisplayMode.isValid()) {
         const char* mode = DisplayMode.getValueAsString();
         if (mode)
             setDisplayMode(mode);

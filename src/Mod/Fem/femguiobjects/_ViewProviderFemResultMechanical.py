@@ -44,14 +44,14 @@ import numpy as np
 
 
 class _ViewProviderFemResultMechanical:
-    "A View Provider for the FemResultObject Python dervied FemResult class"
+    "A View Provider for the FemResultObject Python derived FemResult class"
 
     def __init__(self, vobj):
         vobj.Proxy = self
 
     def getIcon(self):
         """after load from FCStd file, self.icon does not exist, return constant path instead"""
-        return ":/icons/fem-result.svg"
+        return ":/icons/fem-post-result-show.svg"
 
     def attach(self, vobj):
         self.ViewObject = vobj

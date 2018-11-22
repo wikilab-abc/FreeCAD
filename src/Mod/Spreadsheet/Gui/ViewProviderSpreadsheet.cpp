@@ -29,6 +29,7 @@
 # include <QFileInfo>
 # include <QImage>
 # include <QString>
+# include <QMdiSubWindow>
 # include <QMenu>
 #endif
 
@@ -154,25 +155,20 @@ bool ViewProviderSheet::onDelete(const std::vector<std::string> &)
         SpreadsheetGui::SheetView * sheetView = freecad_dynamic_cast<SpreadsheetGui::SheetView>(activeWindow);
 
         if (sheetView) {
-            Sheet * sheet = sheetView->getSheet();
-            QModelIndexList selection = sheetView->selectedIndexes();
-
-            if (selection.size() > 0) {
-                Gui::Command::openCommand("Clear cell(s)");
-                std::vector<Range> ranges = sheetView->selectedRanges();
-                std::vector<Range>::const_iterator i = ranges.begin();
-
-                for (; i != ranges.end(); ++i) {
-                    Gui::Command::doCommand(Gui::Command::Doc,"App.ActiveDocument.%s.clear('%s')", sheet->getNameInDocument(),
-                                            i->rangeString().c_str());
-                }
-                Gui::Command::commitCommand();
-                Gui::Command::doCommand(Gui::Command::Doc, "App.ActiveDocument.recompute()");
-            }
+            sheetView->deleteSelection();
+            return false;
         }
     }
 
-    return false;
+    // If the view is open but not active, try to close it.
+    // This may ask the user for permission in case it's the
+    // last view of the document. (#0003496)
+    QWidget* window = view;
+    QWidget* parent = view->parentWidget();
+    if (qobject_cast<QMdiSubWindow*>(parent)) {
+        window = parent;
+    }
+    return window->close();
 }
 
 SheetView *ViewProviderSheet::showSpreadsheetView()

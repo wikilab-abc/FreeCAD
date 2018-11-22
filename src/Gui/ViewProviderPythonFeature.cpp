@@ -30,7 +30,6 @@
 # include <QFileInfo>
 # include <QMenu>
 # include <QPixmap>
-# include <boost/signals.hpp>
 # include <boost/bind.hpp>
 # include <Inventor/nodes/SoDrawStyle.h>
 # include <Inventor/nodes/SoMaterial.h>
@@ -68,6 +67,9 @@
 
 using namespace Gui;
 
+// #0003564: Python objects: updateData calls to proxy instance that should have been deleted
+// See https://forum.freecadweb.org/viewtopic.php?f=22&t=30429&p=252429#p252429
+#if 0
 namespace Gui {
 
 class PropertyEvent : public QEvent
@@ -218,13 +220,16 @@ ViewProviderPythonFeatureObserver::ViewProviderPythonFeatureObserver()
 ViewProviderPythonFeatureObserver::~ViewProviderPythonFeatureObserver()
 {
 }
+#endif
 
 // ----------------------------------------------------------------------------
 
 ViewProviderPythonFeatureImp::ViewProviderPythonFeatureImp(ViewProviderDocumentObject* vp)
   : object(vp)
 {
+#if 0
     (void)ViewProviderPythonFeatureObserver::instance();
+#endif
 }
 
 ViewProviderPythonFeatureImp::~ViewProviderPythonFeatureImp()
@@ -425,8 +430,11 @@ ViewProviderPythonFeatureImp::setEdit(int ModNum)
                     Py::Callable method(vp.getAttr(std::string("setEdit")));
                     Py::Tuple args(1);
                     args.setItem(0, Py::Int(ModNum));
-                    Py::Boolean ok(method.apply(args));
-                    bool value = (bool)ok;
+                    Py::Object ret(method.apply(args));
+                    if (ret.isNone())
+                        return NotImplemented;
+                    Py::Boolean ok(ret);
+                    bool value = static_cast<bool>(ok);
                     return value ? Accepted : Rejected;
                 }
                 else {
@@ -434,8 +442,11 @@ ViewProviderPythonFeatureImp::setEdit(int ModNum)
                     Py::Tuple args(2);
                     args.setItem(0, Py::Object(object->getPyObject(), true));
                     args.setItem(1, Py::Int(ModNum));
-                    Py::Boolean ok(method.apply(args));
-                    bool value = (bool)ok;
+                    Py::Object ret(method.apply(args));
+                    if (ret.isNone())
+                        return NotImplemented;
+                    Py::Boolean ok(ret);
+                    bool value = static_cast<bool>(ok);
                     return value ? Accepted : Rejected;
                 }
             }
@@ -463,8 +474,11 @@ ViewProviderPythonFeatureImp::unsetEdit(int ModNum)
                     Py::Callable method(vp.getAttr(std::string("unsetEdit")));
                     Py::Tuple args(1);
                     args.setItem(0, Py::Int(ModNum));
-                    Py::Boolean ok(method.apply(args));
-                    bool value = (bool)ok;
+                    Py::Object ret(method.apply(args));
+                    if (ret.isNone())
+                        return NotImplemented;
+                    Py::Boolean ok(ret);
+                    bool value = static_cast<bool>(ok);
                     return value ? Accepted : Rejected;
                 }
                 else {
@@ -472,8 +486,11 @@ ViewProviderPythonFeatureImp::unsetEdit(int ModNum)
                     Py::Tuple args(2);
                     args.setItem(0, Py::Object(object->getPyObject(), true));
                     args.setItem(1, Py::Int(ModNum));
-                    Py::Boolean ok(method.apply(args));
-                    bool value = (bool)ok;
+                    Py::Object ret(method.apply(args));
+                    if (ret.isNone())
+                        return NotImplemented;
+                    Py::Boolean ok(ret);
+                    bool value = static_cast<bool>(ok);
                     return value ? Accepted : Rejected;
                 }
             }

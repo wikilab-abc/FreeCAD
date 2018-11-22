@@ -55,7 +55,7 @@ void Workbench::setupContextMenu(const char* recipient, Gui::MenuItem* item) con
      StdWorkbench::setupContextMenu( recipient, item );
      *item << "Separator"
            << "FEM_MeshClear"
-           << "FEM_MeshPrintInfo";
+           << "FEM_MeshDisplayInfo";
 }
 
 Gui::ToolBarItem* Workbench::setupToolBars() const
@@ -142,10 +142,10 @@ Gui::ToolBarItem* Workbench::setupToolBars() const
               << "FEM_PostApplyChanges"
               << "FEM_PostPipelineFromResult"
               << "Separator"
-              << "FEM_PostCreateClipFilter"
+              << "FEM_PostCreateWarpVectorFilter"
               << "FEM_PostCreateScalarClipFilter"
               << "FEM_PostCreateCutFilter"
-              << "FEM_PostCreateWarpVectorFilter"
+              << "FEM_PostCreateClipFilter"
               << "FEM_PostCreateDataAlongLineFilter"
               << "FEM_PostCreateLinearizedStressesFilter"
               << "FEM_PostCreateDataAtPointFilter"
@@ -176,6 +176,13 @@ Gui::MenuItem* Workbench::setupMenuBar() const
     Gui::MenuItem* elec = new Gui::MenuItem;
     elec->setCommand("&Electrostatic Constraints");
     *elec << "FEM_ConstraintElectrostaticPotential";
+
+    Gui::MenuItem* elegeom = new Gui::MenuItem;
+    elegeom->setCommand("&Element Geometry");
+    *elegeom << "FEM_ElementGeometry1D"
+             << "FEM_ElementRotation1D"
+             << "FEM_ElementGeometry2D"
+             << "FEM_ElementFluid1D";
 
     Gui::MenuItem* mech = new Gui::MenuItem;
     mech->setCommand("&Mechanical Constraints");
@@ -214,11 +221,7 @@ Gui::MenuItem* Workbench::setupMenuBar() const
     *model << "FEM_Analysis"
            << "Separator"
            << material
-           << "Separator"
-           << "FEM_ElementGeometry1D"
-           << "FEM_ElementRotation1D"
-           << "FEM_ElementGeometry2D"
-           << "FEM_ElementFluid1D"
+           << elegeom
            << "Separator"
            << elec
            << fluid
@@ -267,10 +270,10 @@ Gui::MenuItem* Workbench::setupMenuBar() const
              << "FEM_PostApplyChanges"
              << "FEM_PostPipelineFromResult"
              << "Separator"
-             << "FEM_PostCreateClipFilter"
+             << "FEM_PostCreateWarpVectorFilter"
              << "FEM_PostCreateScalarClipFilter"
              << "FEM_PostCreateCutFilter"
-             << "FEM_PostCreateWarpVectorFilter"
+             << "FEM_PostCreateClipFilter"
              << "FEM_PostCreateDataAlongLineFilter"
              << "FEM_PostCreateLinearizedStressesFilter"
              << "FEM_PostCreateDataAtPointFilter"

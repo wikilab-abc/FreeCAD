@@ -37,8 +37,10 @@ if(MSVC)
         list(APPEND FreeCADBase_LIBS
             debug vcruntimed.lib
             debug ucrtd.lib
+            debug concrtd.lib
             optimized vcruntime.lib
             optimized ucrt.lib
+            optimized concrt.lib
         )
     endif()
 elseif(MINGW)
@@ -88,7 +90,15 @@ generate_from_xml(UnitPy)
 generate_from_xml(QuantityPy)
 
 if(SWIG_FOUND)
-    execute_process(COMMAND ${SWIG_EXECUTABLE} -python -external-runtime ${CMAKE_CURRENT_BINARY_DIR}/swigpyrun.h)
+    # Create the file swigpyrun.hh and then compare with the file swigpyrun.h.
+    # If the files are different or if swigpyrun.h doesn't exist then copy swigpyrun.hh.
+    # This is to avoid to having to build the target each time cmake configure is executed.
+    execute_process(COMMAND ${SWIG_EXECUTABLE} -python -external-runtime ${CMAKE_CURRENT_BINARY_DIR}/swigpyrun.hh)
+
+    fc_copy_file_if_different(
+        "${CMAKE_CURRENT_BINARY_DIR}/swigpyrun.hh"
+        "${CMAKE_CURRENT_BINARY_DIR}/swigpyrun.h"
+    )
     add_definitions(-DHAVE_SWIG=1)
 endif(SWIG_FOUND)
 
@@ -260,10 +270,12 @@ SET(FreeCADBase_CPP_SRCS
     TimeInfo.cpp
     Tools.cpp
     Tools2D.cpp
+    Translate.cpp
     Type.cpp
     Uuid.cpp
     Vector3D.cpp
     VectorPyImp.cpp
+    ViewProj.cpp
     Writer.cpp
     XMLTools.cpp
 )
@@ -321,6 +333,7 @@ SET(FreeCADBase_HPP_SRCS
     TimeInfo.h
     Tools.h
     Tools2D.h
+    Translate.h
     Type.h
     Uuid.h
     Vector3D.h

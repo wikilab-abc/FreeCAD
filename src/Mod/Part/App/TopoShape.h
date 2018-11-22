@@ -29,6 +29,7 @@
 #include <TopoDS_Wire.hxx>
 #include <TopTools_ListOfShape.hxx>
 #include <App/ComplexGeoData.h>
+#include <Base/Exception.h>
 
 class gp_Ax1;
 class gp_Ax2;
@@ -36,6 +37,36 @@ class gp_Vec;
 
 namespace Part
 {
+
+/* A special sub-class to indicate null shapes
+ */
+class PartExport NullShapeException : public Base::ValueError
+{
+public:
+   /// Construction
+   NullShapeException();
+   NullShapeException(const char * sMessage);
+   NullShapeException(const std::string& sMessage);
+   /// Construction
+   NullShapeException(const NullShapeException &inst);
+   /// Destruction
+   virtual ~NullShapeException() throw() {}
+};
+
+/* A special sub-class to indicate boolean failures
+ */
+class PartExport BooleanException : public Base::CADKernelError
+{
+public:
+   /// Construction
+   BooleanException();
+   BooleanException(const char * sMessage);
+   BooleanException(const std::string& sMessage);
+   /// Construction
+   BooleanException(const BooleanException &inst);
+   /// Destruction
+   virtual ~BooleanException() throw() {}
+};
 
 class PartExport ShapeSegment : public Data::Segment
 {
@@ -238,6 +269,7 @@ public:
     bool removeInternalWires(double);
     TopoDS_Shape removeSplitter() const;
     TopoDS_Shape defeaturing(const std::vector<TopoDS_Shape>& s) const;
+    TopoDS_Shape makeShell(const TopoDS_Shape&) const;
     //@}
 
     /** @name Getting basic geometric entities */

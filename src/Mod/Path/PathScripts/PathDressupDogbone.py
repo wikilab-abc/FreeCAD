@@ -42,6 +42,9 @@ LOG_MODULE = PathLog.thisModule()
 
 if False:
     PathLog.setLevel(PathLog.Level.DEBUG, LOG_MODULE)
+    PathLog.setLevel(PathLog.Level.DEBUG, LOG_MODULE)
+else:
+    PathLog.setLevel(PathLog.Level.NOTICE, LOG_MODULE)
 
 
 # Qt tanslation handling
@@ -392,6 +395,9 @@ class ObjectDressup:
         obj.Proxy = self
         obj.Base = base
 
+    def onDocumentRestored(self, obj):
+        obj.setEditorMode('BoneBlacklist', 2)  # hide this one
+        
     def __getstate__(self):
         return None
 
@@ -805,12 +811,19 @@ class ObjectDressup:
                 # dressing up a bone dressup
                 obj.Side = obj.Base.Side
             else:
+                PathLog.info("Default side = right")
                 # otherwise dogbones are opposite of the base path's side
                 side = Side.Right
                 if hasattr(obj.Base, 'Side') and obj.Base.Side == 'Inside':
+                    PathLog.info("inside -> side = left")
                     side = Side.Left
-                if hasattr(obj.Base, 'Directin') and obj.Base.Direction == 'CCW':
+                else:
+                    PathLog.info("not inside -> side stays right")
+                if hasattr(obj.Base, 'Direction') and obj.Base.Direction == 'CCW':
+                    PathLog.info("CCW -> switch sides")
                     side = Side.oppositeOf(side)
+                else:
+                    PathLog.info("CW -> stay on side")
                 obj.Side = side
 
         self.toolRadius = 5
@@ -1007,7 +1020,7 @@ class ViewProviderDressup:
         '''this makes sure that the base operation is added back to the project and visible'''
         FreeCADGui.ActiveDocument.getObject(arg1.Object.Base.Name).Visibility = True
         job = PathUtils.findParentJob(arg1.Object)
-        job.Proxy.addOperation(arg1.Object.Base)
+        job.Proxy.addOperation(arg1.Object.Base, arg1.Object)
         arg1.Object.Base = None
         return True
 
@@ -1019,7 +1032,7 @@ def Create(base, name='DogboneDressup'):
     obj = FreeCAD.ActiveDocument.addObject('Path::FeaturePython', 'DogboneDressup')
     dbo = ObjectDressup(obj, base)
     job = PathUtils.findParentJob(base)
-    job.Proxy.addOperation(obj)
+    job.Proxy.addOperation(obj, base)
 
     if FreeCAD.GuiUp:
         ViewProviderDressup(obj.ViewObject)

@@ -99,7 +99,7 @@ void Toolpath::insertCommand(const Command &Cmd, int pos)
         Command *tmp = new Command(Cmd);
         vpcCommands.insert(vpcCommands.begin()+pos,tmp);
     } else {
-        throw Base::Exception("Index not in range");
+        throw Base::IndexError("Index not in range");
     }
     recalculate();
 }
@@ -112,7 +112,7 @@ void Toolpath::deleteCommand(int pos)
     } else if (pos <= static_cast<int>(vpcCommands.size())) {
         vpcCommands.erase (vpcCommands.begin()+pos);
     } else {
-        throw Base::Exception("Index not in range");
+        throw Base::IndexError("Index not in range");
     }
     recalculate();
 }
@@ -282,7 +282,7 @@ void Toolpath::recalculate(void) // recalculates the path cache
             }
         }
     } catch (KDL::Error &e) {
-        throw Base::Exception(e.Description());
+        throw Base::RuntimeError(e.Description());
     }
 #endif
 }
@@ -338,7 +338,7 @@ void Toolpath::Restore(XMLReader &reader)
     std::string file (reader.getAttribute("file") );
 
     if (!file.empty()) {
-        // initate a file read
+        // initiate a file read
         reader.addFile(file.c_str(),this);
     }
 }

@@ -37,7 +37,7 @@
 #include <stack>
 #include <functional>
 
-#include <boost/signals.hpp>
+#include <boost/signals2.hpp>
 
 namespace Base {
     class Writer;
@@ -68,7 +68,8 @@ public:
         KeepTrailingDigits = 1,
         Closable = 2,
         Restoring = 3,
-        Recomputing = 4
+        Recomputing = 4,
+        PartialRestore = 5
     };
 
     /** @name Properties */
@@ -112,41 +113,58 @@ public:
 
     /** @name Signals of the document */
     //@{
+    /// signal before changing an doc property
+    boost::signals2::signal<void (const App::Document&, const App::Property&)> signalBeforeChange;
+    /// signal on changed doc property
+    boost::signals2::signal<void (const App::Document&, const App::Property&)> signalChanged;
     /// signal on new Object
-    boost::signal<void (const App::DocumentObject&)> signalNewObject;
-    //boost::signal<void (const App::DocumentObject&)>     m_sig;
+    boost::signals2::signal<void (const App::DocumentObject&)> signalNewObject;
+    //boost::signals2::signal<void (const App::DocumentObject&)>     m_sig;
     /// signal on deleted Object
-    boost::signal<void (const App::DocumentObject&)> signalDeletedObject;
+    boost::signals2::signal<void (const App::DocumentObject&)> signalDeletedObject;
+    /// signal before changing an Object
+    boost::signals2::signal<void (const App::DocumentObject&, const App::Property&)> signalBeforeChangeObject;
     /// signal on changed Object
-    boost::signal<void (const App::DocumentObject&, const App::Property&)> signalChangedObject;
+    boost::signals2::signal<void (const App::DocumentObject&, const App::Property&)> signalChangedObject;
     /// signal on relabeled Object
-    boost::signal<void (const App::DocumentObject&)> signalRelabelObject;
+    boost::signals2::signal<void (const App::DocumentObject&)> signalRelabelObject;
     /// signal on activated Object
-    boost::signal<void (const App::DocumentObject&)> signalActivatedObject;
+    boost::signals2::signal<void (const App::DocumentObject&)> signalActivatedObject;
     /// signal on created object
-    boost::signal<void (const App::DocumentObject&, Transaction*)> signalTransactionAppend;
+    boost::signals2::signal<void (const App::DocumentObject&, Transaction*)> signalTransactionAppend;
     /// signal on removed object
-    boost::signal<void (const App::DocumentObject&, Transaction*)> signalTransactionRemove;
+    boost::signals2::signal<void (const App::DocumentObject&, Transaction*)> signalTransactionRemove;
     /// signal on undo
-    boost::signal<void (const App::Document&)> signalUndo;
+    boost::signals2::signal<void (const App::Document&)> signalUndo;
     /// signal on redo
-    boost::signal<void (const App::Document&)> signalRedo;
+    boost::signals2::signal<void (const App::Document&)> signalRedo;
     /** signal on load/save document
      * this signal is given when the document gets streamed.
      * you can use this hook to write additional information in
-     * the file (like the Gui::Document it does).
+     * the file (like the Gui::Document does).
      */
-    boost::signal<void (Base::Writer   &)> signalSaveDocument;
-    boost::signal<void (Base::XMLReader&)> signalRestoreDocument;
-    boost::signal<void (const std::vector<App::DocumentObject*>&,
-                        Base::Writer   &)> signalExportObjects;
-    boost::signal<void (const std::vector<App::DocumentObject*>&,
-                        Base::Writer   &)> signalExportViewObjects;
-    boost::signal<void (const std::vector<App::DocumentObject*>&,
-                        Base::XMLReader&)> signalImportObjects;
-    boost::signal<void (const std::vector<App::DocumentObject*>&, Base::Reader&,
-                        const std::map<std::string, std::string>&)> signalImportViewObjects;
-    boost::signal<void (const App::Document&)> signalRecomputed;
+    boost::signals2::signal<void (Base::Writer   &)> signalSaveDocument;
+    boost::signals2::signal<void (Base::XMLReader&)> signalRestoreDocument;
+    boost::signals2::signal<void (const std::vector<App::DocumentObject*>&,
+                                  Base::Writer   &)> signalExportObjects;
+    boost::signals2::signal<void (const std::vector<App::DocumentObject*>&,
+                                  Base::Writer   &)> signalExportViewObjects;
+    boost::signals2::signal<void (const std::vector<App::DocumentObject*>&,
+                                  Base::XMLReader&)> signalImportObjects;
+    boost::signals2::signal<void (const std::vector<App::DocumentObject*>&, Base::Reader&,
+                                  const std::map<std::string, std::string>&)> signalImportViewObjects;
+    //signal starting a save action to a file
+    boost::signals2::signal<void (const App::Document&, const std::string&)> signalStartSave;
+    //signal finishing a save action to a file
+    boost::signals2::signal<void (const App::Document&, const std::string&)> signalFinishSave;
+    boost::signals2::signal<void (const App::Document&)> signalRecomputed;
+    boost::signals2::signal<void (const App::DocumentObject&)> signalRecomputedObject;
+    //signal a new opened transaction
+    boost::signals2::signal<void (const App::Document&, std::string)> signalOpenTransaction;
+    // signal a committed transaction
+    boost::signals2::signal<void (const App::Document&)> signalCommitTransaction;
+    // signal an aborted transaction
+    boost::signals2::signal<void (const App::Document&)> signalAbortTransaction;
     //@}
 
     /** @name File handling of the document */
@@ -156,7 +174,7 @@ public:
     /// Save the document to the file in Property Path
     bool save (void);
     bool saveAs(const char* file);
-    bool saveCopy(const char* file);
+    bool saveCopy(const char* file) const;
     /// Restore the document from the file in Property Path
     void restore (void);
     void exportObjects(const std::vector<App::DocumentObject*>&, std::ostream&);
@@ -202,7 +220,7 @@ public:
      * is raised.
      */
     void addObject(DocumentObject*, const char* pObjectName=0);
-    
+
 
     /** Copy an object from another document to this document
      * If \a recursive is true then all objects this object depends on
@@ -255,7 +273,7 @@ public:
     void setClosable(bool);
     /// check whether the document can be closed
     bool isClosable() const;
-    /// Recompute all touched features and return the amount of recalculated features
+    /// Recompute all touched features and return the number of recalculated features
     int recompute();
     /// Recompute only one feature
     void recomputeFeature(DocumentObject* Feat);
@@ -286,6 +304,9 @@ public:
     void abortTransaction();
     /// Check if a transaction is open
     bool hasPendingTransaction() const;
+    /// Check if a transaction is open and its list is empty.
+    /// If no transaction is open true is returned.
+    bool isTransactionEmpty() const;
     /// Set the Undo limit in Byte!
     void setUndoLimit(unsigned int UndoMemSize=0);
     /// Returns the actual memory consumption of the Undo redo stuff.
@@ -364,7 +385,9 @@ protected:
     void breakDependency(DocumentObject* pcObject, bool clear);
     std::vector<App::DocumentObject*> readObjects(Base::XMLReader& reader);
     void writeObjects(const std::vector<App::DocumentObject*>&, Base::Writer &writer) const;
+    bool saveToFile(const char* filename) const;
 
+    void onBeforeChange(const Property* prop);
     void onChanged(const Property* prop);
     /// callback from the Document objects before property will be changed
     void onBeforeChangeProperty(const TransactionalObject *Who, const Property *What);

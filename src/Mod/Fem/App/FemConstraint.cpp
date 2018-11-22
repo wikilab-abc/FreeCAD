@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (c) 2013 Jan Rheinländer <jrheinlaender[at]users.sourceforge.net>     *
- *                                                                         *
+ *   Copyright (c) 2013 Jan Rheinländer                                    *
+ *                          <jrheinlaender[at]users.sourceforge.net>       *
  *   This file is part of the FreeCAD CAx development system.              *
  *                                                                         *
  *   This library is free software; you can redistribute it and/or         *
@@ -433,7 +433,7 @@ const Base::Vector3d Constraint::getDirection(const App::PropertyLinkSub &direct
     try {
         sh = shape.getSubShape(subName.c_str());
     }
-    catch (Standard_Failure) {
+    catch (Standard_Failure&) {
         std::stringstream str;
         str << "No such sub-element '" << subName << "'";
         throw Base::AttributeError(str.str());

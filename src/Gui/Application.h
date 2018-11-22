@@ -43,6 +43,7 @@ class MDIView;
 class MainWindow;
 class MenuItem;
 class ViewProvider;
+class ViewProviderDocumentObject;
 
 /** The Application main class
  * This is the central class of the GUI 
@@ -88,33 +89,37 @@ public:
     /** @name Signals of the Application */
     //@{
     /// signal on new Document
-    boost::signal<void (const Gui::Document&)> signalNewDocument;
+    boost::signals2::signal<void (const Gui::Document&)> signalNewDocument;
     /// signal on deleted Document
-    boost::signal<void (const Gui::Document&)> signalDeleteDocument;
+    boost::signals2::signal<void (const Gui::Document&)> signalDeleteDocument;
     /// signal on relabeling Document
-    boost::signal<void (const Gui::Document&)> signalRelabelDocument;
+    boost::signals2::signal<void (const Gui::Document&)> signalRelabelDocument;
     /// signal on renaming Document
-    boost::signal<void (const Gui::Document&)> signalRenameDocument;
+    boost::signals2::signal<void (const Gui::Document&)> signalRenameDocument;
     /// signal on activating Document
-    boost::signal<void (const Gui::Document&)> signalActiveDocument;
+    boost::signals2::signal<void (const Gui::Document&)> signalActiveDocument;
     /// signal on new Object
-    boost::signal<void (const Gui::ViewProvider&)> signalNewObject;
+    boost::signals2::signal<void (const Gui::ViewProvider&)> signalNewObject;
     /// signal on deleted Object
-    boost::signal<void (const Gui::ViewProvider&)> signalDeletedObject;
+    boost::signals2::signal<void (const Gui::ViewProvider&)> signalDeletedObject;
     /// signal on changed object property
-    boost::signal<void (const Gui::ViewProvider&, const App::Property&)> signalChangedObject;
+    boost::signals2::signal<void (const Gui::ViewProvider&, const App::Property&)> signalChangedObject;
     /// signal on renamed Object
-    boost::signal<void (const Gui::ViewProvider&)> signalRelabelObject;
+    boost::signals2::signal<void (const Gui::ViewProvider&)> signalRelabelObject;
     /// signal on activated Object
-    boost::signal<void (const Gui::ViewProvider&)> signalActivatedObject;
+    boost::signals2::signal<void (const Gui::ViewProvider&)> signalActivatedObject;
     /// signal on activated workbench
-    boost::signal<void (const char*)> signalActivateWorkbench;
+    boost::signals2::signal<void (const char*)> signalActivateWorkbench;
     /// signal on added workbench
-    boost::signal<void (const char*)> signalAddWorkbench;
+    boost::signals2::signal<void (const char*)> signalAddWorkbench;
     /// signal on removed workbench
-    boost::signal<void (const char*)> signalRemoveWorkbench;
+    boost::signals2::signal<void (const char*)> signalRemoveWorkbench;
     /// signal on activating view
-    boost::signal<void (const Gui::MDIView*)> signalActivateView;
+    boost::signals2::signal<void (const Gui::MDIView*)> signalActivateView;
+    /// signal on entering in edit mode
+    boost::signals2::signal<void (const Gui::ViewProviderDocumentObject&)> signalInEdit;
+    /// signal on leaving edit mode
+    boost::signals2::signal<void (const Gui::ViewProviderDocumentObject&)> signalResetEdit;
     //@}
 
     /** @name methods for Document handling */
@@ -131,6 +136,8 @@ protected:
     void slotChangedObject(const ViewProvider&, const App::Property& Prop);
     void slotRelabelObject(const ViewProvider&);
     void slotActivatedObject(const ViewProvider&);
+    void slotInEdit(const Gui::ViewProviderDocumentObject&);
+    void slotResetEdit(const Gui::ViewProviderDocumentObject&);
 
 public:
     /// message when a GuiDocument is about to vanish
@@ -147,9 +154,11 @@ public:
     * If no such document exists 0 is returned.
     */
     Gui::Document* getDocument(const App::Document* pDoc) const;
-	/// Getter for the active view of the active document or null
-	Gui::MDIView* activeView(void) const;
-	/// Shows the associated view provider of the given object
+    /// Getter for the active view of the active document or null
+    Gui::MDIView* activeView(void) const;
+    /// Activate a view of the given type of the active document
+    void activateView(const Base::Type&, bool create=false);
+    /// Shows the associated view provider of the given object
     void showViewProvider(const App::DocumentObject*);
     /// Hides the associated view provider of the given object
     void hideViewProvider(const App::DocumentObject*);
@@ -188,6 +197,8 @@ public:
     static Application* Instance;
     static void initApplication(void);
     static void initTypes(void);
+    static void initOpenInventor(void);
+    static void runInitGuiScript(void);
     static void runApplication(void);
     void tryClose( QCloseEvent * e );
     //@}
@@ -197,56 +208,59 @@ public:
     // python exports goes here +++++++++++++++++++++++++++++++++++++++++++	
     //---------------------------------------------------------------------
     // static python wrapper of the exported functions
-    PYFUNCDEF_S(sActivateWorkbenchHandler); // activates a workbench object
-    PYFUNCDEF_S(sAddWorkbenchHandler);      // adds a new workbench handler to a list
-    PYFUNCDEF_S(sRemoveWorkbenchHandler);   // removes a workbench handler from the list
-    PYFUNCDEF_S(sGetWorkbenchHandler);      // retrieves the workbench handler
-    PYFUNCDEF_S(sListWorkbenchHandlers);    // retrieves a list of all workbench handlers
-    PYFUNCDEF_S(sActiveWorkbenchHandler);   // retrieves the active workbench object
-    PYFUNCDEF_S(sAddResPath);               // adds a path where to find resources
-    PYFUNCDEF_S(sAddLangPath);              // adds a path to a qm file
-    PYFUNCDEF_S(sAddIconPath);              // adds a path to an icon file
-    PYFUNCDEF_S(sAddIcon);                  // adds an icon to the cache
+    static PyObject* sActivateWorkbenchHandler (PyObject *self,PyObject *args); // activates a workbench object
+    static PyObject* sAddWorkbenchHandler      (PyObject *self,PyObject *args); // adds a new workbench handler to a list
+    static PyObject* sRemoveWorkbenchHandler   (PyObject *self,PyObject *args); // removes a workbench handler from the list
+    static PyObject* sGetWorkbenchHandler      (PyObject *self,PyObject *args); // retrieves the workbench handler
+    static PyObject* sListWorkbenchHandlers    (PyObject *self,PyObject *args); // retrieves a list of all workbench handlers
+    static PyObject* sActiveWorkbenchHandler   (PyObject *self,PyObject *args); // retrieves the active workbench object
+    static PyObject* sAddResPath               (PyObject *self,PyObject *args); // adds a path where to find resources
+    static PyObject* sAddLangPath              (PyObject *self,PyObject *args); // adds a path to a qm file
+    static PyObject* sAddIconPath              (PyObject *self,PyObject *args); // adds a path to an icon file
+    static PyObject* sAddIcon                  (PyObject *self,PyObject *args); // adds an icon to the cache
 
-    PYFUNCDEF_S(sSendActiveView);
+    static PyObject* sSendActiveView           (PyObject *self,PyObject *args);
 
-    PYFUNCDEF_S(sGetMainWindow);
-    PYFUNCDEF_S(sUpdateGui);
-    PYFUNCDEF_S(sUpdateLocale);
-    PYFUNCDEF_S(sGetLocale);
-    PYFUNCDEF_S(sSetLocale);
-    PYFUNCDEF_S(sSupportedLocales);
-    PYFUNCDEF_S(sCreateDialog);
-    PYFUNCDEF_S(sAddPreferencePage);
+    static PyObject* sGetMainWindow            (PyObject *self,PyObject *args);
+    static PyObject* sUpdateGui                (PyObject *self,PyObject *args);
+    static PyObject* sUpdateLocale             (PyObject *self,PyObject *args);
+    static PyObject* sGetLocale                (PyObject *self,PyObject *args);
+    static PyObject* sSetLocale                (PyObject *self,PyObject *args);
+    static PyObject* sSupportedLocales         (PyObject *self,PyObject *args);
+    static PyObject* sCreateDialog             (PyObject *self,PyObject *args);
+    static PyObject* sAddPreferencePage        (PyObject *self,PyObject *args);
 
-    PYFUNCDEF_S(sRunCommand);
-    PYFUNCDEF_S(sAddCommand);
-    PYFUNCDEF_S(sListCommands);
+    static PyObject* sRunCommand               (PyObject *self,PyObject *args);
+    static PyObject* sAddCommand               (PyObject *self,PyObject *args);
+    static PyObject* sListCommands             (PyObject *self,PyObject *args);
 
-    PYFUNCDEF_S(sHide);                     // deprecated
-    PYFUNCDEF_S(sShow);                     // deprecated
-    PYFUNCDEF_S(sHideObject);               // hide view provider object
-    PYFUNCDEF_S(sShowObject);               // show view provider object
+    static PyObject* sHide                     (PyObject *self,PyObject *args); // deprecated
+    static PyObject* sShow                     (PyObject *self,PyObject *args); // deprecated
+    static PyObject* sHideObject               (PyObject *self,PyObject *args); // hide view provider object
+    static PyObject* sShowObject               (PyObject *self,PyObject *args); // show view provider object
 
-    PYFUNCDEF_S(sOpen);                     // open Python scripts
-    PYFUNCDEF_S(sInsert);                   // open Python scripts
-    PYFUNCDEF_S(sExport);
+    static PyObject* sOpen                     (PyObject *self,PyObject *args); // open Python scripts
+    static PyObject* sInsert                   (PyObject *self,PyObject *args); // open Python scripts
+    static PyObject* sExport                   (PyObject *self,PyObject *args);
 
-    PYFUNCDEF_S(sActiveDocument);
-    PYFUNCDEF_S(sSetActiveDocument);
-    PYFUNCDEF_S(sActiveView);
-    PYFUNCDEF_S(sGetDocument);
+    static PyObject* sActiveDocument           (PyObject *self,PyObject *args);
+    static PyObject* sSetActiveDocument        (PyObject *self,PyObject *args);
+    static PyObject* sActiveView               (PyObject *self,PyObject *args);
+    static PyObject* sActivateView             (PyObject *self,PyObject *args);
+    static PyObject* sGetDocument              (PyObject *self,PyObject *args);
 
-    PYFUNCDEF_S(sDoCommand);
-    PYFUNCDEF_S(sDoCommandGui);
-    PYFUNCDEF_S(sAddModule);
+    static PyObject* sDoCommand                (PyObject *self,PyObject *args);
+    static PyObject* sDoCommandGui             (PyObject *self,PyObject *args);
+    static PyObject* sAddModule                (PyObject *self,PyObject *args);
 
-    PYFUNCDEF_S(sShowDownloads);
-    PYFUNCDEF_S(sShowPreferences);
+    static PyObject* sShowDownloads            (PyObject *self,PyObject *args);
+    static PyObject* sShowPreferences          (PyObject *self,PyObject *args);
 
-    PYFUNCDEF_S(sCreateViewer);
-
-    PYFUNCDEF_S(sGetMarkerIndex);
+    static PyObject* sCreateViewer             (PyObject *self,PyObject *args);
+    static PyObject* sGetMarkerIndex           (PyObject *self,PyObject *args);
+    
+    static PyObject* sAddDocObserver           (PyObject *self,PyObject *args);
+    static PyObject* sRemoveDocObserver        (PyObject *self,PyObject *args);
 
     static PyMethodDef    Methods[]; 
 

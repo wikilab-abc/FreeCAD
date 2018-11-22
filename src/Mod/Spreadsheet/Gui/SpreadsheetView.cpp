@@ -148,6 +148,18 @@ bool SheetView::onMsg(const char *pMsg, const char **)
         getGuiDocument()->saveAs();
         return true;
     }
+    else if (strcmp("Cut",pMsg) == 0) {
+        ui->cells->cutSelection();
+        return true;
+    }
+    else if (strcmp("Copy",pMsg) == 0) {
+        ui->cells->copySelection();
+        return true;
+    }
+    else if (strcmp("Paste",pMsg) == 0) {
+        ui->cells->pasteClipboard();
+        return true;
+    }
     else
         return false;
 }
@@ -165,6 +177,12 @@ bool SheetView::onHasMsg(const char *pMsg) const
     else if  (strcmp("Save",pMsg) == 0)
         return true;
     else if (strcmp("SaveAs",pMsg) == 0)
+        return true;
+    else if (strcmp("Cut",pMsg) == 0)
+        return true;
+    else if (strcmp("Copy",pMsg) == 0)
+        return true;
+    else if (strcmp("Paste",pMsg) == 0)
         return true;
     else
         return false;
@@ -330,6 +348,11 @@ std::vector<Range> SheetView::selectedRanges() const
 QModelIndexList SheetView::selectedIndexes() const
 {
     return ui->cells->selectionModel()->selectedIndexes();
+}
+
+void SheetView::deleteSelection()
+{
+    ui->cells->deleteSelection();
 }
 
 QModelIndex SheetView::currentIndex() const

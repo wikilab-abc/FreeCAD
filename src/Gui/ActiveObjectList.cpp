@@ -40,13 +40,29 @@ using namespace Gui;
 
 void Gui::ActiveObjectList::setObject(App::DocumentObject* obj, const char* name, const Gui::HighlightMode& mode)
 {
-    if (hasObject(name)){
-        Gui::Application::Instance->activeDocument()->signalHighlightObject(*dynamic_cast<Gui::ViewProviderDocumentObject*>(Gui::Application::Instance->activeDocument()->getViewProvider(getObject<App::DocumentObject*>(name))), mode, false);
+    ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/TreeView");
+    bool autoExpand = hGrp->GetBool("TreeActiveAutoExpand", true);
+
+    if (hasObject(name)) {
+        App::DocumentObject* act = getObject<App::DocumentObject*>(name);
+        Gui::Document* doc = Application::Instance->getDocument(act->getDocument());
+        Gui::ViewProviderDocumentObject* viewProvider = static_cast
+                <Gui::ViewProviderDocumentObject*>(doc->getViewProvider(act));
+        doc->signalHighlightObject(*viewProvider, mode, false);
+        if (autoExpand)
+            doc->signalExpandObject(*viewProvider, Gui::Collapse);
     }
-    if (obj){
-        Gui::Application::Instance->activeDocument()->signalHighlightObject(*dynamic_cast<Gui::ViewProviderDocumentObject*>(Gui::Application::Instance->activeDocument()->getViewProvider(obj)), mode, true);
+
+    if (obj) {
+        Gui::Document* doc = Application::Instance->getDocument(obj->getDocument());
+        Gui::ViewProviderDocumentObject* viewProvider = static_cast
+                <Gui::ViewProviderDocumentObject*>(doc->getViewProvider(obj));
+        doc->signalHighlightObject(*viewProvider, mode, true);
+        if (autoExpand)
+            doc->signalExpandObject(*viewProvider, Gui::Expand);
         _ObjectMap[name] = obj;
-    } else {
+    }
+    else {
         if (hasObject(name))
             _ObjectMap.erase(name);
     }

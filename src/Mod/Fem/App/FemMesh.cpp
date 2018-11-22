@@ -90,11 +90,10 @@ using namespace Base;
 using namespace boost;
 
 static int StatCount = 0;
-#if SMESH_VERSION_MAJOR >= 7
-    SMESH_Gen* FemMesh::_mesh_gen = 0;
-#endif
 
-TYPESYSTEM_SOURCE(Fem::FemMesh , Base::Persistence);
+SMESH_Gen* FemMesh::_mesh_gen = 0;
+
+TYPESYSTEM_SOURCE(Fem::FemMesh , Base::Persistence)
 
 FemMesh::FemMesh()
 {
@@ -493,13 +492,9 @@ SMESH_Mesh* FemMesh::getSMesh()
 
 SMESH_Gen * FemMesh::getGenerator()
 {
-#if SMESH_VERSION_MAJOR < 7
-    return SMESH_Gen::get();
-#else
     if (!FemMesh::_mesh_gen)
         FemMesh::_mesh_gen = new SMESH_Gen();
     return FemMesh::_mesh_gen;
-#endif
 }
 
 void FemMesh::addHypothesis(const TopoDS_Shape & aSubShape, SMESH_HypothesisPtr hyp)
@@ -631,6 +626,34 @@ std::list<int> FemMesh::getFacesByFace(const TopoDS_Face &face) const
         // For curved faces it is possible that a volume contributes more than one face
         if (element_face_nodes.size() == static_cast<std::size_t>(numNodes)) {
             result.push_back(face->GetID());
+        }
+    }
+
+    result.sort();
+    return result;
+}
+
+std::list<int> FemMesh::getEdgesByEdge(const TopoDS_Edge &edge) const
+{
+    std::list<int> result;
+    std::set<int> nodes_on_edge = getNodesByEdge(edge);
+
+    SMDS_EdgeIteratorPtr edge_iter = myMesh->GetMeshDS()->edgesIterator();
+    while (edge_iter->more()) {
+        const SMDS_MeshEdge* edge = static_cast<const SMDS_MeshEdge*>(edge_iter->next());
+        int numNodes = edge->NbNodes();
+
+        std::set<int> edge_nodes;
+        for (int i=0; i<numNodes; i++) {
+            edge_nodes.insert(edge->GetNode(i)->GetID());
+        }
+
+        std::vector<int> element_edge_nodes;
+        std::set_intersection(nodes_on_edge.begin(), nodes_on_edge.end(), edge_nodes.begin(), edge_nodes.end(),
+            std::back_insert_iterator<std::vector<int> >(element_edge_nodes));
+
+        if (element_edge_nodes.size() == static_cast<std::size_t>(numNodes)) {
+            result.push_back(edge->GetID());
         }
     }
 
@@ -1152,7 +1175,7 @@ void FemMesh::read(const char *FileName)
 
     // checking on the file
     if (!File.isReadable())
-        throw Base::Exception("File to load not existing or not readable");
+        throw Base::FileException("File to load not existing or not readable", File);
 
     if (File.hasExtension("unv") ) {
         // read UNV file
@@ -1183,7 +1206,7 @@ void FemMesh::read(const char *FileName)
     }
 #endif
     else{
-        throw Base::Exception("Unknown extension");
+        throw Base::FileException("Unknown extension");
     }
 }
 
@@ -1617,7 +1640,7 @@ void FemMesh::write(const char *FileName) const
     }
 #endif
     else{
-        throw Base::Exception("An unknown file extension was added!");
+        throw Base::FileException("An unknown file extension was added!");
     }
 }
 
@@ -1656,7 +1679,7 @@ void FemMesh::Restore(Base::XMLReader &reader)
     std::string file (reader.getAttribute("file") );
 
     if (!file.empty()) {
-        // initate a file read
+        // initiate a file read
         reader.addFile(file.c_str(),this);
     }
     if( reader.hasAttribute("a11")){

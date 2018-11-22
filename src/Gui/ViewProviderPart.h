@@ -44,6 +44,8 @@ public:
     virtual ~ViewProviderPart();
 
     virtual bool doubleClicked(void);
+    virtual void setupContextMenu(QMenu* menu, QObject* receiver, const char* member);
+
 protected:
     /// get called by the container whenever a property has been changed
     virtual void onChanged(const App::Property* prop);
@@ -53,5 +55,5 @@ typedef ViewProviderPythonFeatureT<ViewProviderPart> ViewProviderPartPython;
 
 } // namespace Gui
 
-#endif // GUI_VIEWPROVIDER_DOCUMENTOBJECTGROUP_H
+#endif // GUI_VIEWPROVIDER_ViewProviderPart_H
 

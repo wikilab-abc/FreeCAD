@@ -101,6 +101,8 @@ public:
     std::list<int> getElementNodes(int id) const;
     /// retrieving face IDs number by face
     std::list<int> getFacesByFace(const TopoDS_Face &face) const;
+    /// retrieving edge IDs number by edge
+    std::list<int> getEdgesByEdge(const TopoDS_Edge &edge) const;
     /// retrieving volume IDs and face IDs number by face
     std::list<std::pair<int, int> > getVolumesByFace(const TopoDS_Face &face) const;
     /// retrieving volume IDs and CalculiX face number by face
@@ -161,9 +163,7 @@ private:
     SMESH_Mesh *myMesh;
 
     std::list<SMESH_HypothesisPtr> hypoth;
-#if SMESH_VERSION_MAJOR >= 7
     static SMESH_Gen *_mesh_gen;
-#endif
 };
 
 } //namespace Part

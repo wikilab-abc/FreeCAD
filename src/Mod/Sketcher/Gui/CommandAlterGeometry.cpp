@@ -113,7 +113,10 @@ void CmdSketcherToggleConstruction::activated(int iMsg)
     else // there was a selection, so operate in toggle mode.
     {
         // get the selection
-        std::vector<Gui::SelectionObject> selection = getSelection().getSelectionEx();
+        std::vector<Gui::SelectionObject> selection;
+        selection = getSelection().getSelectionEx(0, Sketcher::SketchObject::getClassTypeId());
+
+        Sketcher::SketchObject* Obj = static_cast<Sketcher::SketchObject*>(selection[0].getObject());
 
         // only one sketch with its subelements are allowed to be selected
         if (selection.size() != 1) {
@@ -145,7 +148,7 @@ void CmdSketcherToggleConstruction::activated(int iMsg)
         // finish the transaction and update
         commitCommand();
 
-        tryAutoRecompute();
+        tryAutoRecompute(Obj);
 
         // clear the selection (convenience)
         getSelection().clearSelection();

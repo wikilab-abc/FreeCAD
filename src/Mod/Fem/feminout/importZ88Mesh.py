@@ -80,8 +80,33 @@ def export(objectslist, filename):
 
 
 ########## module specific methods ##########
+def write(fem_mesh, filename):
+    '''directly write a FemMesh to a Z88 mesh file format
+    fem_mesh: a FemMesh'''
+
+    if not fem_mesh.isDerivedFrom("Fem::FemMesh"):
+        FreeCAD.Console.PrintError("Not a FemMesh was given as parameter.\n")
+        return
+    femnodes_mesh = fem_mesh.Nodes
+    import femmesh.meshtools as FemMeshTools
+    femelement_table = FemMeshTools.get_femelement_table(fem_mesh)
+    z88_element_type = get_z88_element_type(fem_mesh, femelement_table)
+    f = pyopen(filename, "wb")
+    write_z88_mesh_to_file(femnodes_mesh, femelement_table, z88_element_type, f)
+    f.close()
+
+
+def read(filename):
+    '''read a FemMesh from a Z88 mesh file and return the FemMesh
+    '''
+    # no document object is created, just the FemMesh is returned
+    mesh_data = read_z88_mesh(filename)
+    from . import importToolsFem
+    return importToolsFem.make_femmesh(mesh_data)
+
+
 def import_z88_mesh(filename, analysis=None):
-    '''insert a FreeCAD FEM Mesh object in the ActiveDocument
+    '''read a FEM mesh from a Z88 mesh file and insert a FreeCAD FEM Mesh object in the ActiveDocument
     '''
     mesh_data = read_z88_mesh(filename)
     mesh_name = os.path.basename(os.path.splitext(filename)[0])
@@ -235,7 +260,7 @@ def read_z88_mesh(z88_mesh_input):
                     input_continues = False
                 elif z88_element_type == 16:
                     # volume16 Z88 --> tetra10 FreeCAD
-                    # N1, N2, N4, N3, N5, N8, N10, N7, N6, N9, , Z88 to FC is differend as FC to Z88
+                    # N1, N2, N4, N3, N5, N8, N10, N7, N6, N9, , Z88 to FC is different as FC to Z88
                     nd1 = int(linecolumns[0])
                     nd2 = int(linecolumns[1])
                     nd3 = int(linecolumns[2])
@@ -373,7 +398,7 @@ def write_z88_mesh_to_file(femnodes_mesh, femelement_table, z88_element_type, f)
                     n[3], n[1], n[2], n[0]))
         elif z88_element_type == 16:
             # tetra10 FreeCAD --> volume16 Z88
-            # N1, N2, N4, N3, N5, N9, N8, N6, N10, N7, FC to Z88 is differend as Z88 to FC
+            # N1, N2, N4, N3, N5, N9, N8, N6, N10, N7, FC to Z88 is different as Z88 to FC
             f.write("{0} {1}\n".format(element, z88_element_type, element))
             f.write("{0} {1} {2} {3} {4} {5} {6} {7} {8} {9}\n".format(
                     n[0], n[1], n[3], n[2], n[4], n[8], n[7], n[5], n[9], n[6]))

@@ -1098,7 +1098,7 @@ int Sketch::checkGeoId(int geoId) const
     if (geoId < 0)
         geoId += Geoms.size();//convert negative external-geometry index to index into Geoms
     if(!(   geoId >= 0   &&   geoId < int(Geoms.size())   ))
-        throw Base::Exception("Sketch::checkGeoId. GeoId index out range.");
+        throw Base::IndexError("Sketch::checkGeoId. GeoId index out range.");
     return geoId;
 }
 
@@ -1140,7 +1140,7 @@ GCS::Curve* Sketch::getGCSCurveByGeoId(int geoId)
 int Sketch::addConstraint(const Constraint *constraint)
 {
     if (Geoms.empty())
-        throw Base::Exception("Sketch::addConstraint. Can't add constraint to a sketch with no geometry!");
+        throw Base::ValueError("Sketch::addConstraint. Can't add constraint to a sketch with no geometry!");
     int rtn = -1;
 
     ConstrDef c;
@@ -2854,7 +2854,7 @@ double Sketch::calculateAngleViaPoint(int geoId1, int geoId2, double px, double 
     GCS::Curve* crv1 =getGCSCurveByGeoId(geoId1);
     GCS::Curve* crv2 =getGCSCurveByGeoId(geoId2);
     if (!crv1 || !crv2) {
-        throw Base::Exception("calculateAngleViaPoint: getGCSCurveByGeoId returned NULL!");
+        throw Base::ValueError("calculateAngleViaPoint: getGCSCurveByGeoId returned NULL!");
     }
 
     return GCSsys.calculateAngleViaPoint(*crv1, *crv2, p);
@@ -2871,7 +2871,7 @@ Base::Vector3d Sketch::calculateNormalAtPoint(int geoIdCurve, double px, double 
     //check pointers
     GCS::Curve* crv = getGCSCurveByGeoId(geoIdCurve);
     if (!crv) {
-        throw Base::Exception("calculateNormalAtPoint: getGCSCurveByGeoId returned NULL!\n");
+        throw Base::ValueError("calculateNormalAtPoint: getGCSCurveByGeoId returned NULL!\n");
     }
 
     double tx = 0.0, ty = 0.0;
@@ -3048,7 +3048,7 @@ bool Sketch::updateGeometry()
                 #endif
 
             }
-        } catch (Base::Exception e) {
+        } catch (Base::Exception &e) {
             Base::Console().Error("Updating geometry: Error build geometry(%d): %s\n",
                                   i,e.what());
             return false;
@@ -3659,7 +3659,7 @@ bool Sketch::hasDependentParameters(int geoId, PointPos pos) const
     try {
         geoId = checkGeoId(geoId);
     }
-    catch (Base::Exception) {
+    catch (Base::Exception&) {
         return false;
     }
 

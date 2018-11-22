@@ -30,6 +30,7 @@
 #include <vector>
 #include <list>
 #include <map>
+#include <boost/signals2.hpp>
 #include <CXX/Objects.hxx>
 
 #include <Base/Observer.h>
@@ -95,14 +96,14 @@ public:
 
 
 
-// Export an instance of the base class (to avoid warning C4275, see also 
+// Export an instance of the base class (to avoid warning C4275, see also
 // C++ Language Reference/General Rules and Limitations on MSDN for more details.)
 //
 // For compiler gcc4.1 we need to define the template class outside namespace 'Gui'
-// otherwise we get the compiler error: 
+// otherwise we get the compiler error:
 // 'explicit instantiation of 'class Base::Subject<const Gui::SelectionChanges&>'
 // in namespace 'Gui' (which does not enclose namespace 'Base')
-// 
+//
 // It seems that this construct is not longer needed for gcc4.4 and even leads to
 // errors under Mac OS X. Thus, we check for version between 4.1 and 4.4.
 // It seems that for Mac OS X this can be completely ignored
@@ -141,10 +142,12 @@ public:
 
 private:
     virtual void onSelectionChanged(const SelectionChanges& msg) = 0;
+    void _onSelectionChanged(const SelectionChanges& msg);
 
 private:
-    typedef boost::signals::connection Connection;
+    typedef boost::signals2::connection Connection;
     Connection connectSelection;
+    bool blockSelection;
 };
 
 /**
@@ -200,27 +203,29 @@ public:
 
 
 /** The Selection class
- *  The selection singleton keeps track of the selection state of 
+ *  The selection singleton keeps track of the selection state of
  *  the whole application. It gets messages from all entities which can
  *  alter the selection (e.g. tree view and 3D-view) and sends messages
- *  to entities which need to keep track on the selection state. 
- * 
- *  The selection consists mainly out of following information per selected object: 
+ *  to entities which need to keep track on the selection state.
+ *
+ *  The selection consists mainly out of following information per selected object:
  *  - document (pointer)
  *  - Object   (pointer)
  *  - list of subelements (list of strings)
  *  - 3D coordinates where the user clicks to select (Vector3d)
  *
- *  Also the preselection is managed. That means you can add a filter to prevent selection 
+ *  Also the preselection is managed. That means you can add a filter to prevent selection
  *  of unwanted objects or subelements.
  */
 class GuiExport SelectionSingleton : public Base::Subject<const SelectionChanges&>
 {
 public:
-    /// Add to selection 
+    /// Add to selection
     bool addSelection(const char* pDocName, const char* pObjectName=0, const char* pSubName=0, float x=0, float y=0, float z=0);
     /// Add to selection with several sub-elements
     bool addSelection(const char* pDocName, const char* pObjectName, const std::vector<std::string>& pSubNames);
+    /// Add to selection
+    bool addSelection(const SelectionObject&);
     /// Remove from selection (for internal use)
     void rmvSelection(const char* pDocName, const char* pObjectName=0, const char* pSubName=0);
     /// Set the selection for a document
@@ -238,9 +243,9 @@ public:
     bool setPreselect(const char* pDocName, const char* pObjectName, const char* pSubName, float x=0, float y=0, float z=0);
     /// remove the present preselection
     void rmvPreselect();
-    /// sets different coords for the preselection 
+    /// sets different coords for the preselection
     void setPreselectCoord(float x, float y, float z);
-    /// returns the present preselection 
+    /// returns the present preselection
     const SelectionChanges& getPreselection(void) const;
     /// add a SelectionGate to control what is selectable
     void addSelectionGate(Gui::SelectionGate *gate);
@@ -249,8 +254,8 @@ public:
 
 
     /** Returns the number of selected objects with a special object type
-     * It's the convenient way to check if the right objects are selected to 
-     * perform an operation (GuiCommand). The check also detects base types. 
+     * It's the convenient way to check if the right objects are selected to
+     * perform an operation (GuiCommand). The check also detects base types.
      * E.g. "Part" also fits on "PartImport" or "PartTransform types.
      * If no document name is given the active document is assumed.
      */
@@ -290,7 +295,7 @@ public:
     };
 
     /// signal on new object
-    boost::signal<void (const SelectionChanges& msg)> signalSelectionChanged;
+    boost::signals2::signal<void (const SelectionChanges& msg)> signalSelectionChanged;
 
     /** Returns a vector of selection objects
      * If no document name is given the objects of the active are returned.
@@ -317,7 +322,7 @@ public:
     bool hasSelection() const;
     bool hasSelection(const char* doc) const;
 
-    /// Size of selcted entities for all documents
+    /// Size of selected entities for all documents
     unsigned int size(void) const {
         return static_cast<unsigned int>(_SelList.size());
     }
@@ -330,21 +335,21 @@ public:
     static PyMethodDef    Methods[];
 
 protected:
-    static PyObject *sAddSelection        (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject *sRemoveSelection     (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject *sClearSelection      (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject *sIsSelected          (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject *sCountObjectsOfType  (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject *sGetSelection        (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject *sGetPreselection     (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject *sRemPreselection     (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject *sGetCompleteSelection(PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject *sGetSelectionEx      (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject *sGetSelectionObject  (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject *sAddSelObserver      (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject *sRemSelObserver      (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject *sAddSelectionGate    (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject *sRemoveSelectionGate (PyObject *self,PyObject *args,PyObject *kwd);
+    static PyObject *sAddSelection        (PyObject *self,PyObject *args);
+    static PyObject *sRemoveSelection     (PyObject *self,PyObject *args);
+    static PyObject *sClearSelection      (PyObject *self,PyObject *args);
+    static PyObject *sIsSelected          (PyObject *self,PyObject *args);
+    static PyObject *sCountObjectsOfType  (PyObject *self,PyObject *args);
+    static PyObject *sGetSelection        (PyObject *self,PyObject *args);
+    static PyObject *sGetPreselection     (PyObject *self,PyObject *args);
+    static PyObject *sRemPreselection     (PyObject *self,PyObject *args);
+    static PyObject *sGetCompleteSelection(PyObject *self,PyObject *args);
+    static PyObject *sGetSelectionEx      (PyObject *self,PyObject *args);
+    static PyObject *sGetSelectionObject  (PyObject *self,PyObject *args);
+    static PyObject *sAddSelObserver      (PyObject *self,PyObject *args);
+    static PyObject *sRemSelObserver      (PyObject *self,PyObject *args);
+    static PyObject *sAddSelectionGate    (PyObject *self,PyObject *args);
+    static PyObject *sRemoveSelectionGate (PyObject *self,PyObject *args);
 
 protected:
     /// Construction

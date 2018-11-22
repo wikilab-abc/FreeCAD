@@ -129,7 +129,8 @@ DrawViewPart::DrawViewPart(void) : geometryObject(0)
     //properties that affect Geometry
     ADD_PROPERTY_TYPE(Source ,(0),group,App::Prop_None,"3D Shape to view");
     Source.setScope(App::LinkScope::Global);
-    ADD_PROPERTY_TYPE(Direction ,(0,0,1.0)    ,group,App::Prop_None,"Projection direction. The direction you are looking from.");
+    ADD_PROPERTY_TYPE(Direction ,(0.0,-1.0,0.0),
+                      group,App::Prop_None,"Projection direction. The direction you are looking from.");
     ADD_PROPERTY_TYPE(Perspective ,(false),group,App::Prop_None,"Perspective(true) or Orthographic(false) projection");
     ADD_PROPERTY_TYPE(Focus,(defDist),group,App::Prop_None,"Perspective view focus distance");
 
@@ -245,22 +246,24 @@ App::DocumentObjectExecReturn *DrawViewPart::execute(void)
     }
 
     gp_Pnt inputCenter;
+    Base::Vector3d stdOrg(0.0,0.0,0.0);
+    
     inputCenter = TechDrawGeometry::findCentroid(shape,
-                                                 Direction.getValue());
+                                                 getViewAxis(stdOrg,Direction.getValue()));
+                                                 
     shapeCentroid = Base::Vector3d(inputCenter.X(),inputCenter.Y(),inputCenter.Z());
-
     TopoDS_Shape mirroredShape;
     mirroredShape = TechDrawGeometry::mirrorShape(shape,
                                                   inputCenter,
                                                   getScale());
 
-     gp_Ax2 viewAxis = getViewAxis(shapeCentroid,Direction.getValue());
-     if (!DrawUtil::fpCompare(Rotation.getValue(),0.0)) {
+    gp_Ax2 viewAxis = getViewAxis(shapeCentroid,Direction.getValue());
+    if (!DrawUtil::fpCompare(Rotation.getValue(),0.0)) {
         mirroredShape = TechDrawGeometry::rotateShape(mirroredShape,
                                                       viewAxis,
                                                       Rotation.getValue());
      }
-     geometryObject =  buildGeometryObject(mirroredShape,viewAxis);
+    geometryObject =  buildGeometryObject(mirroredShape,viewAxis);
 
 #if MOD_TECHDRAW_HANDLE_FACES
     if (handleFaces() && !geometryObject->usePolygonHLR()) {
@@ -288,6 +291,7 @@ short DrawViewPart::mustExecute() const
                     ScaleType.isTouched() ||
                     Perspective.isTouched() ||
                     Focus.isTouched() ||
+                    Rotation.isTouched() ||
                     SmoothVisible.isTouched() ||
                     SeamVisible.isTouched() ||
                     IsoVisible.isTouched() ||
@@ -332,6 +336,9 @@ TechDrawGeometry::GeometryObject* DrawViewPart::buildGeometryObject(TopoDS_Shape
         go->projectShape(shape,
             viewAxis);
     }
+
+    auto start = chrono::high_resolution_clock::now();
+
     go->extractGeometry(TechDrawGeometry::ecHARD,                   //always show the hard&outline visible lines
                         true);
     go->extractGeometry(TechDrawGeometry::ecOUTLINE,
@@ -366,6 +373,11 @@ TechDrawGeometry::GeometryObject* DrawViewPart::buildGeometryObject(TopoDS_Shape
         go->extractGeometry(TechDrawGeometry::ecUVISO,
                             false);
     }
+    auto end   = chrono::high_resolution_clock::now();
+    auto diff  = end - start;
+    double diffOut = chrono::duration <double, milli> (diff).count();
+    Base::Console().Log("TIMING - %s DVP spent: %.3f millisecs in GO::extractGeometry\n",getNameInDocument(),diffOut);
+
     bbox = go->calcBoundingBox();
     return go;
 }
@@ -472,7 +484,7 @@ void DrawViewPart::extractFaces()
     ew.loadEdges(newEdges);
     bool success = ew.perform();
     if (!success) {
-        Base::Console().Warning("DVP::extractFaces - input is not planar graph. No face detection\n");
+        Base::Console().Warning("DVP::extractFaces - %s -Can't make faces from projected edges\n", getNameInDocument());
         return;
     }
     std::vector<TopoDS_Wire> fw = ew.getResultNoDups();
@@ -690,8 +702,9 @@ gp_Ax2 DrawViewPart::getViewAxis(const Base::Vector3d& pt,
                                  const Base::Vector3d& axis,
                                  const bool flip)  const
 {
-     gp_Ax2 viewAxis = TechDrawGeometry::getViewAxis(pt,axis,flip);
-     return viewAxis;
+    gp_Ax2 viewAxis = TechDrawGeometry::getViewAxis(pt,axis,flip);
+     
+    return viewAxis;
 }
 
 void DrawViewPart::saveParamSpace(const Base::Vector3d& direction, const Base::Vector3d& xAxis)

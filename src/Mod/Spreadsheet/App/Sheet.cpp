@@ -35,8 +35,10 @@
 #include <App/DynamicProperty.h>
 #include <App/FeaturePythonPyImp.h>
 #include <Base/Exception.h>
+#include <Base/FileInfo.h>
 #include <Base/Placement.h>
 #include <Base/Reader.h>
+#include <Base/Stream.h>
 #include <Base/Writer.h>
 #include <Base/Tools.h>
 #include "Sheet.h"
@@ -140,14 +142,13 @@ void Sheet::clearAll()
 
 bool Sheet::importFromFile(const std::string &filename, char delimiter, char quoteChar, char escapeChar)
 {
-    std::ifstream file;
+    Base::FileInfo fi(filename);
+    Base::ifstream file(fi, std::ios::in);
     int row = 0;
 
     PropertySheet::AtomicPropertyChange signaller(cells);
 
     clearAll();
-
-    file.open(filename.c_str(), std::ios::in);
 
     if (file.is_open()) {
         std::string line;
@@ -426,7 +427,7 @@ void Sheet::getCellAddress(const Property *prop, CellAddress & address)
     if (i != propAddress.end())
         address = i->second;
     else
-        throw Base::Exception("Property is not a cell");
+        throw Base::TypeError("Property is not a cell");
 }
 
 /**
@@ -793,7 +794,7 @@ DocumentObjectExecReturn *Sheet::execute(void)
                 ++i;
             }
         }
-        catch (std::exception) {
+        catch (std::exception&) {
             // Cycle detected; flag all with errors
 
             std::map<CellAddress, Vertex>::const_iterator i = VertexList.begin();
@@ -1136,14 +1137,14 @@ void Sheet::setAlias(CellAddress address, const std::string &alias)
         if (existingAlias == address.toString()) // Same as old?
             return;
         else
-            throw Base::Exception("Alias already defined");
+            throw Base::ValueError("Alias already defined");
     }
     else if (alias.size() == 0) // Empty?
         cells.setAlias(address, "");
     else if (isValidAlias(alias)) // Valid?
         cells.setAlias(address, alias);
     else
-        throw Base::Exception("Invalid alias");
+        throw Base::ValueError("Invalid alias");
 }
 
 /**

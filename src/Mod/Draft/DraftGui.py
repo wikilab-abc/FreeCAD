@@ -131,7 +131,7 @@ class todo:
             for f, arg in todo.itinerary:
                 try:
                     # print("debug: executing",f)
-                    if arg:
+                    if arg or (arg == False):
                         f(arg)
                     else:
                         f()
@@ -357,7 +357,7 @@ class DraftToolBar:
             mw = FreeCADGui.getMainWindow()
             mw.addToolBar(self.tray)
             self.tray.setParent(mw)
-            self.tray.show()
+            self.tray.hide()
 
         else:
             # create the draft Toolbar                
@@ -1198,23 +1198,24 @@ class DraftToolBar:
         self.delButton.setChecked(not(addmode))
 
     def showCommandOptions(self,name):
-        cmdstr = "\n"+name+" "+translate("draft","options")+" : "
-        first = True
-        for k,v in inCommandShortcuts.items():
-            if v[2]:
-                if getattr(self,v[2]).isVisible():
+        if FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Draft").GetBool("Verbose",True):
+            cmdstr = "\n"+name+" "+translate("draft","options")+" : "
+            first = True
+            for k,v in inCommandShortcuts.items():
+                if v[2]:
+                    if getattr(self,v[2]).isVisible():
+                        if first:
+                            first = False
+                        else:
+                            cmdstr += ", "
+                        cmdstr += v[0] + ":" + v[1]
+                else:
                     if first:
                         first = False
                     else:
                         cmdstr += ", "
                     cmdstr += v[0] + ":" + v[1]
-            else:
-                if first:
-                    first = False
-                else:
-                    cmdstr += ", "
-                cmdstr += v[0] + ":" + v[1]
-        FreeCAD.Console.PrintMessage(cmdstr+"\n\n")
+            FreeCAD.Console.PrintMessage(cmdstr+"\n\n")
 
     def checkLocal(self):
         "checks if x,y,z coords must be displayed as local or global"
@@ -1584,7 +1585,7 @@ class DraftToolBar:
 
     def checkSpecialChars(self,txt):
         '''
-        checks for special characters in the entered coords that mut be
+        checks for special characters in the entered coords that must be
         treated as shortcuts
         '''
 
@@ -1816,6 +1817,9 @@ class DraftToolBar:
             
     def getDefaultColor(self,type,rgb=False):
         "gets color from the preferences or toolbar"
+        r = 0
+        g = 0
+        b = 0
         if type == "snap":
             color = Draft.getParam("snapcolor",4294967295)
             r = ((color>>24)&0xFF)/255

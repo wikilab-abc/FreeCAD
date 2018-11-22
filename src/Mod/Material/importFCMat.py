@@ -25,6 +25,9 @@ import FreeCAD
 # import Material
 from Material import getMaterialAttributeStructure
 import os
+import sys
+if sys.version_info.major >= 3:
+    unicode = str
 
 
 __title__ = "FreeCAD material card importer"
@@ -33,7 +36,7 @@ __url__ = "http://www.freecadweb.org"
 
 
 # to distinguish python built-in open function from the one declared below
-if open.__module__ == '__builtin__':
+if open.__module__ in ['__builtin__','io']:
     pythonopen = open
 
 

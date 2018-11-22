@@ -92,13 +92,7 @@ void openEditDatumDialog(Sketcher::SketchObject* sketch, int ConstrNbr)
     Sketcher::Constraint* Constr = Constraints[ConstrNbr];
 
     // Return if constraint doesn't have editable value
-    if (Constr->Type == Sketcher::Distance ||
-        Constr->Type == Sketcher::DistanceX || 
-        Constr->Type == Sketcher::DistanceY ||
-        Constr->Type == Sketcher::Radius ||
-        Constr->Type == Sketcher::Diameter ||
-        Constr->Type == Sketcher::Angle ||
-        Constr->Type == Sketcher::SnellsLaw) {
+    if (Constr->isDimensional()) {
 
         QDialog dlg(Gui::getMainWindow());
         Ui::InsertDatum ui_ins_datum;
@@ -176,7 +170,7 @@ void openEditDatumDialog(Sketcher::SketchObject* sketch, int ConstrNbr)
                         sketch->solve();
                     }
 
-                    tryAutoRecompute();
+                    tryAutoRecompute(sketch);
                 }
                 catch (const Base::Exception& e) {
                     QMessageBox::critical(qApp->activeWindow(), QObject::tr("Dimensional constraint"), QString::fromUtf8(e.what()));
@@ -225,7 +219,7 @@ void finishDistanceConstraint(Gui::Command* cmd, Sketcher::SketchObject* sketch,
         cmd->commitCommand();
     }
 
-    tryAutoRecompute();
+    tryAutoRecompute(sketch);
     cmd->getSelection().clearSelection();
 }
 
@@ -342,7 +336,7 @@ bool SketcherGui::isSimpleVertex(const Sketcher::SketchObject* Obj, int GeoId, P
 bool SketcherGui::isConstructionPoint(const Sketcher::SketchObject* Obj, int GeoId)
 {
     const Part::Geometry * geo = Obj->getGeometry(GeoId);
-    return (geo->getTypeId() == Part::GeomPoint::getClassTypeId() && geo->Construction == true);
+    return (geo && geo->getTypeId() == Part::GeomPoint::getClassTypeId() && geo->Construction == true);
 }
 
 bool SketcherGui::IsPointAlreadyOnCurve(int GeoIdCurve, int GeoIdPoint, Sketcher::PointPos PosIdPoint, Sketcher::SketchObject* Obj)
@@ -366,7 +360,7 @@ bool SketcherGui::IsPointAlreadyOnCurve(int GeoIdCurve, int GeoIdPoint, Sketcher
 /// NOTE: A command must be opened before calling this function, which this function
 /// commits or aborts as appropriate. The reason is for compatibility reasons with
 /// other code e.g. "Autoconstraints" in DrawSketchHandler.cpp
-void SketcherGui::makeTangentToEllipseviaNewPoint(const Sketcher::SketchObject* Obj,
+void SketcherGui::makeTangentToEllipseviaNewPoint(Sketcher::SketchObject* Obj,
                                              const Part::Geometry *geom1, 
                                              const Part::Geometry *geom2,
                                              int geoId1,
@@ -392,7 +386,7 @@ void SketcherGui::makeTangentToEllipseviaNewPoint(const Sketcher::SketchObject* 
         center2= (static_cast<const Part::GeomArcOfCircle *>(geom2))->getCenter();
 
     Base::Vector3d direction=center2-center;
-    double tapprox=atan2(direction.y,direction.x)-phi; // we approximate the eccentric anomally by the polar
+    double tapprox=atan2(direction.y,direction.x)-phi; // we approximate the eccentric anomaly by the polar
 
     Base::Vector3d PoE = Base::Vector3d(center.x+majord*cos(tapprox)*cos(phi)-minord*sin(tapprox)*sin(phi),
                                         center.y+majord*cos(tapprox)*sin(phi)+minord*sin(tapprox)*cos(phi), 0);
@@ -418,12 +412,12 @@ void SketcherGui::makeTangentToEllipseviaNewPoint(const Sketcher::SketchObject* 
         Base::Console().Error("%s\n", e.what());
         Gui::Command::abortCommand();
         
-        tryAutoRecompute();
+        tryAutoRecompute(Obj);
         return;
     }
 
     Gui::Command::commitCommand();
-    tryAutoRecompute();
+    tryAutoRecompute(Obj);
 }
 
 /// Makes a simple tangency constraint using extra point + tangent via point
@@ -432,7 +426,7 @@ void SketcherGui::makeTangentToEllipseviaNewPoint(const Sketcher::SketchObject* 
 /// NOTE: A command must be opened before calling this function, which this function
 /// commits or aborts as appropriate. The reason is for compatibility reasons with
 /// other code e.g. "Autoconstraints" in DrawSketchHandler.cpp
-void SketcherGui::makeTangentToArcOfEllipseviaNewPoint(const Sketcher::SketchObject* Obj,
+void SketcherGui::makeTangentToArcOfEllipseviaNewPoint(Sketcher::SketchObject* Obj,
                                              const Part::Geometry *geom1, 
                                              const Part::Geometry *geom2,
                                              int geoId1,
@@ -456,7 +450,7 @@ void SketcherGui::makeTangentToArcOfEllipseviaNewPoint(const Sketcher::SketchObj
         center2= (static_cast<const Part::GeomArcOfCircle *>(geom2))->getCenter();
 
     Base::Vector3d direction=center2-center;
-    double tapprox=atan2(direction.y,direction.x)-phi; // we approximate the eccentric anomally by the polar
+    double tapprox=atan2(direction.y,direction.x)-phi; // we approximate the eccentric anomaly by the polar
 
     Base::Vector3d PoE = Base::Vector3d(center.x+majord*cos(tapprox)*cos(phi)-minord*sin(tapprox)*sin(phi),
                                         center.y+majord*cos(tapprox)*sin(phi)+minord*sin(tapprox)*cos(phi), 0);
@@ -482,12 +476,12 @@ void SketcherGui::makeTangentToArcOfEllipseviaNewPoint(const Sketcher::SketchObj
         Base::Console().Error("%s\n", e.what());
         Gui::Command::abortCommand();
 
-        tryAutoRecompute();
+        tryAutoRecompute(Obj);
         return;
     }
 
     Gui::Command::commitCommand();
-    tryAutoRecompute();
+    tryAutoRecompute(Obj);
 }
 
 /// Makes a simple tangency constraint using extra point + tangent via point
@@ -496,7 +490,7 @@ void SketcherGui::makeTangentToArcOfEllipseviaNewPoint(const Sketcher::SketchObj
 /// NOTE: A command must be opened before calling this function, which this function
 /// commits or aborts as appropriate. The reason is for compatibility reasons with
 /// other code e.g. "Autoconstraints" in DrawSketchHandler.cpp
-void SketcherGui::makeTangentToArcOfHyperbolaviaNewPoint(const Sketcher::SketchObject* Obj,
+void SketcherGui::makeTangentToArcOfHyperbolaviaNewPoint(Sketcher::SketchObject* Obj,
                                                        const Part::Geometry *geom1, 
                                                        const Part::Geometry *geom2,
                                                        int geoId1,
@@ -563,13 +557,13 @@ void SketcherGui::makeTangentToArcOfHyperbolaviaNewPoint(const Sketcher::SketchO
         Base::Console().Error("%s\n", e.what());
         Gui::Command::abortCommand();
 
-        tryAutoRecompute();
+        tryAutoRecompute(Obj);
         return;
     }
 
     Gui::Command::commitCommand();
 
-    tryAutoRecompute();
+    tryAutoRecompute(Obj);
 }
 
 /// Makes a simple tangency constraint using extra point + tangent via point
@@ -578,7 +572,7 @@ void SketcherGui::makeTangentToArcOfHyperbolaviaNewPoint(const Sketcher::SketchO
 /// NOTE: A command must be opened before calling this function, which this function
 /// commits or aborts as appropriate. The reason is for compatibility reasons with
 /// other code e.g. "Autoconstraints" in DrawSketchHandler.cpp
-void SketcherGui::makeTangentToArcOfParabolaviaNewPoint(const Sketcher::SketchObject* Obj,
+void SketcherGui::makeTangentToArcOfParabolaviaNewPoint(Sketcher::SketchObject* Obj,
                                                        const Part::Geometry *geom1, 
                                                        const Part::Geometry *geom2,
                                                        int geoId1,
@@ -650,15 +644,15 @@ void SketcherGui::makeTangentToArcOfParabolaviaNewPoint(const Sketcher::SketchOb
         Base::Console().Error("%s\n", e.what());
         Gui::Command::abortCommand();
 
-        tryAutoRecompute();
+        tryAutoRecompute(Obj);
         return;
     }
 
     Gui::Command::commitCommand();
-    tryAutoRecompute();
+    tryAutoRecompute(Obj);
 }
 
-std::string SketcherGui::getStrippedPythonExceptionString(const Base::Exception e)
+std::string SketcherGui::getStrippedPythonExceptionString(const Base::Exception& e)
 {
     std::string msg = e.what();
     
@@ -669,21 +663,46 @@ std::string SketcherGui::getStrippedPythonExceptionString(const Base::Exception 
         return msg;
 }
 
-bool SketcherGui::tryAutoRecompute()
+bool SketcherGui::tryAutoRecompute(Sketcher::SketchObject* obj, bool &autoremoveredundants)
 {
     ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/Mod/Sketcher");
     bool autoRecompute = hGrp->GetBool("AutoRecompute",false);
+    bool autoRemoveRedundants = hGrp->GetBool("AutoRemoveRedundants",false);
 
+    // We need to make sure the solver has right redundancy information before trying to remove the redundants.
+    // for example if a non-driving constraint has been added.
+    if(autoRemoveRedundants && autoRecompute) 
+        obj->solve();
+        
+    if(autoRemoveRedundants)
+        obj->autoRemoveRedundants();
+    
     if (autoRecompute)
         Gui::Command::updateActive();
-
+    
+    autoremoveredundants = autoRemoveRedundants;
+    
     return autoRecompute;
 }
 
-void SketcherGui::tryAutoRecomputeIfNotSolve(Sketcher::SketchObject* obj)
+bool SketcherGui::tryAutoRecompute(Sketcher::SketchObject* obj)
 {
-    if(!tryAutoRecompute())
+    bool autoremoveredundants;
+    
+    return tryAutoRecompute(obj,autoremoveredundants);
+}
+
+void SketcherGui::tryAutoRecomputeIfNotSolve(Sketcher::SketchObject* obj)
+{   
+    bool autoremoveredundants;
+    
+    if(!tryAutoRecompute(obj,autoremoveredundants)) {
         obj->solve();
+        
+        if(autoremoveredundants) {
+            obj->autoRemoveRedundants();
+        }
+    }
 }
 
 bool SketcherGui::checkConstraint(const std::vector< Sketcher::Constraint * > &vals, ConstraintType type, int geoid, PointPos pos) 
@@ -966,7 +985,7 @@ public:
         Gui::Selection().rmvSelectionGate();
         Gui::Selection().addSelectionGate(selFilterGate);
 
-        // Constrait icon size in px
+        // Constrain icon size in px
         int iconSize = 16;
         QPixmap cursorPixmap(cursor_genericconstraint),
                 icon = Gui::BitmapFactory().pixmap(cmd->sPixmap).scaledToWidth(iconSize);
@@ -1193,14 +1212,14 @@ void CmdSketcherConstrainHorizontal::activated(int iMsg)
     std::vector<Gui::SelectionObject> selection = getSelection().getSelectionEx();
 
     // only one sketch with its subelements are allowed to be selected
-    if (selection.size() != 1) {
+    if (selection.size() != 1 || !selection[0].isObjectTypeOf(Sketcher::SketchObject::getClassTypeId())) {
         ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/Mod/Sketcher");
         bool constraintMode = hGrp->GetBool("ContinuousConstraintMode", true);
 
         if (constraintMode) {
-        ActivateHandler(getActiveGuiDocument(),
-                new DrawSketchHandlerGenConstraint(constraintCursor, this));
-        getSelection().clearSelection();
+            ActivateHandler(getActiveGuiDocument(),
+                    new DrawSketchHandlerGenConstraint(constraintCursor, this));
+            getSelection().clearSelection();
         } else {    
             QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
                                  QObject::tr("Select an edge from the sketch."));
@@ -1301,7 +1320,7 @@ void CmdSketcherConstrainHorizontal::activated(int iMsg)
     // finish the transaction and update
     commitCommand();
 
-    tryAutoRecompute();
+    tryAutoRecompute(Obj);
 
     // clear the selection (convenience)
     getSelection().clearSelection();
@@ -1355,7 +1374,7 @@ void CmdSketcherConstrainHorizontal::applyConstraint(std::vector<SelIdPair> &sel
             // finish the transaction and update
             Gui::Command::commitCommand();
 
-            tryAutoRecompute();
+            tryAutoRecompute(Obj);
         }
 
         break;
@@ -1440,7 +1459,7 @@ void CmdSketcherConstrainVertical::activated(int iMsg)
     std::vector<Gui::SelectionObject> selection = getSelection().getSelectionEx();
 
     // only one sketch with its subelements are allowed to be selected
-    if (selection.size() != 1) {
+    if (selection.size() != 1 || !selection[0].isObjectTypeOf(Sketcher::SketchObject::getClassTypeId())) {
         ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/Mod/Sketcher");
         bool constraintMode = hGrp->GetBool("ContinuousConstraintMode", true);
 
@@ -1548,7 +1567,7 @@ void CmdSketcherConstrainVertical::activated(int iMsg)
     // finish the transaction and update
     commitCommand();
 
-    tryAutoRecompute();
+    tryAutoRecompute(Obj);
 
     // clear the selection (convenience)
     getSelection().clearSelection();
@@ -1601,7 +1620,7 @@ void CmdSketcherConstrainVertical::applyConstraint(std::vector<SelIdPair> &selSe
                       sketchgui->getObject()->getNameInDocument(),CrvId);
             // finish the transaction and update
             Gui::Command::commitCommand();
-            tryAutoRecompute();
+            tryAutoRecompute(Obj);
         }
 
         break;
@@ -1686,7 +1705,7 @@ void CmdSketcherConstrainLock::activated(int iMsg)
     std::vector<Gui::SelectionObject> selection = getSelection().getSelectionEx();
 
     // only one sketch with its subelements are allowed to be selected
-    if (selection.size() != 1) {
+    if (selection.size() != 1 || !selection[0].isObjectTypeOf(Sketcher::SketchObject::getClassTypeId())) {
         ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/Mod/Sketcher");
         bool constraintMode = hGrp->GetBool("ContinuousConstraintMode", true);
 
@@ -1809,7 +1828,7 @@ void CmdSketcherConstrainLock::activated(int iMsg)
 
     // finish the transaction and update
     commitCommand();
-    tryAutoRecompute();
+    tryAutoRecompute(Obj);
 
     // clear the selection (convenience)
     getSelection().clearSelection();
@@ -1954,7 +1973,7 @@ void CmdSketcherConstrainBlock::activated(int iMsg)
     std::vector<Gui::SelectionObject> selection = getSelection().getSelectionEx();
     
     // only one sketch with its subelements are allowed to be selected
-    if (selection.size() != 1) {
+    if (selection.size() != 1 || !selection[0].isObjectTypeOf(Sketcher::SketchObject::getClassTypeId())) {
         ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/Mod/Sketcher");
         bool constraintMode = hGrp->GetBool("ContinuousConstraintMode", true);
         
@@ -2030,12 +2049,12 @@ void CmdSketcherConstrainBlock::activated(int iMsg)
 
             Gui::Command::abortCommand();
 
-            tryAutoRecompute();
+            tryAutoRecompute(Obj);
             return;
         }
 
         commitCommand();
-        tryAutoRecompute();
+        tryAutoRecompute(Obj);
     }
 
     // clear the selection (convenience)
@@ -2076,12 +2095,12 @@ void CmdSketcherConstrainBlock::applyConstraint(std::vector<SelIdPair> &selSeq, 
 
                 Gui::Command::abortCommand();
 
-                tryAutoRecompute();
+                tryAutoRecompute(static_cast<Sketcher::SketchObject *>(sketchgui->getObject()));
                 return;
             }
 
             commitCommand();
-            tryAutoRecompute();
+            tryAutoRecompute(static_cast<Sketcher::SketchObject *>(sketchgui->getObject()));
         }
         break;
     default:
@@ -2264,7 +2283,7 @@ void CmdSketcherConstrainCoincident::activated(int iMsg)
     std::vector<Gui::SelectionObject> selection = getSelection().getSelectionEx();
 
     // only one sketch with its subelements are allowed to be selected
-    if (selection.size() != 1) {
+    if (selection.size() != 1 || !selection[0].isObjectTypeOf(Sketcher::SketchObject::getClassTypeId())) {
         ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/Mod/Sketcher");
         bool constraintMode = hGrp->GetBool("ContinuousConstraintMode", true);
 
@@ -2373,7 +2392,7 @@ void CmdSketcherConstrainCoincident::activated(int iMsg)
     else
         abortCommand();
 
-    tryAutoRecompute();
+    tryAutoRecompute(Obj);
 
     // clear the selection (convenience)
     getSelection().clearSelection();
@@ -2458,7 +2477,7 @@ void CmdSketcherConstrainDistance::activated(int iMsg)
     std::vector<Gui::SelectionObject> selection = getSelection().getSelectionEx();
 
     // only one sketch with its subelements are allowed to be selected
-    if (selection.size() != 1) {
+    if (selection.size() != 1 || !selection[0].isObjectTypeOf(Sketcher::SketchObject::getClassTypeId())) {
         ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/Mod/Sketcher");
         bool constraintMode = hGrp->GetBool("ContinuousConstraintMode", true);
 
@@ -2842,14 +2861,14 @@ void CmdSketcherConstrainPointOnObject::activated(int iMsg)
     std::vector<Gui::SelectionObject> selection = getSelection().getSelectionEx();
 
     // only one sketch with its subelements are allowed to be selected
-    if (selection.size() != 1) {
+    if (selection.size() != 1 || !selection[0].isObjectTypeOf(Sketcher::SketchObject::getClassTypeId())) {
         ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/Mod/Sketcher");
         bool constraintMode = hGrp->GetBool("ContinuousConstraintMode", true);
 
         if (constraintMode) {
-        ActivateHandler(getActiveGuiDocument(),
-                new DrawSketchHandlerGenConstraint(constraintCursor, this));
-        getSelection().clearSelection();
+            ActivateHandler(getActiveGuiDocument(),
+                    new DrawSketchHandlerGenConstraint(constraintCursor, this));
+            getSelection().clearSelection();
         } else {
             // TODO: Get the exact message from git history and put it here
             QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
@@ -2975,7 +2994,7 @@ void CmdSketcherConstrainPointOnObject::applyConstraint(std::vector<SelIdPair> &
                 sketchgui->getObject()->getNameInDocument(), GeoIdVt, PosIdVt, GeoIdCrv);
 
         commitCommand();
-        tryAutoRecompute();
+        tryAutoRecompute(Obj);
     }
     else {
         abortCommand();
@@ -3026,7 +3045,7 @@ void CmdSketcherConstrainDistanceX::activated(int iMsg)
     std::vector<Gui::SelectionObject> selection = getSelection().getSelectionEx();
 
     // only one sketch with its subelements are allowed to be selected
-    if (selection.size() != 1) {
+    if (selection.size() != 1 || !selection[0].isObjectTypeOf(Sketcher::SketchObject::getClassTypeId())) {
         ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/Mod/Sketcher");
         bool constraintMode = hGrp->GetBool("ContinuousConstraintMode", true);
 
@@ -3276,14 +3295,14 @@ void CmdSketcherConstrainDistanceY::activated(int iMsg)
     std::vector<Gui::SelectionObject> selection = getSelection().getSelectionEx();
 
     // only one sketch with its subelements are allowed to be selected
-    if (selection.size() != 1) {
+    if (selection.size() != 1 || !selection[0].isObjectTypeOf(Sketcher::SketchObject::getClassTypeId())) {
         ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/Mod/Sketcher");
         bool constraintMode = hGrp->GetBool("ContinuousConstraintMode", true);
 
         if (constraintMode) {
-        ActivateHandler(getActiveGuiDocument(),
-                new DrawSketchHandlerGenConstraint(constraintCursor, this));
-        getSelection().clearSelection();
+            ActivateHandler(getActiveGuiDocument(),
+                    new DrawSketchHandlerGenConstraint(constraintCursor, this));
+            getSelection().clearSelection();
         } else {
             // TODO: Get the exact message from git history and put it here
             QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
@@ -3561,14 +3580,14 @@ void CmdSketcherConstrainParallel::activated(int iMsg)
     std::vector<Gui::SelectionObject> selection = getSelection().getSelectionEx();
 
     // only one sketch with its subelements are allowed to be selected
-    if (selection.size() != 1) {
+    if (selection.size() != 1 || !selection[0].isObjectTypeOf(Sketcher::SketchObject::getClassTypeId())) {
         ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/Mod/Sketcher");
         bool constraintMode = hGrp->GetBool("ContinuousConstraintMode", true);
 
         if (constraintMode) {
-        ActivateHandler(getActiveGuiDocument(),
-                new DrawSketchHandlerGenConstraint(constraintCursor, this));
-        getSelection().clearSelection();
+            ActivateHandler(getActiveGuiDocument(),
+                    new DrawSketchHandlerGenConstraint(constraintCursor, this));
+            getSelection().clearSelection();
         } else {
             // TODO: Get the exact message from git history and put it here
             QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
@@ -3631,7 +3650,7 @@ void CmdSketcherConstrainParallel::activated(int iMsg)
     // finish the transaction and update
     commitCommand();
     
-    tryAutoRecompute();
+    tryAutoRecompute(Obj);
 
     // clear the selection (convenience)
     getSelection().clearSelection();
@@ -3670,7 +3689,7 @@ void CmdSketcherConstrainParallel::applyConstraint(std::vector<SelIdPair> &selSe
             sketchgui->getObject()->getNameInDocument(), GeoId1, GeoId2);
         // finish the transaction and update
         commitCommand();
-        tryAutoRecompute();
+        tryAutoRecompute(Obj);
     }
 }
 
@@ -3769,14 +3788,14 @@ void CmdSketcherConstrainPerpendicular::activated(int iMsg)
     std::vector<Gui::SelectionObject> selection = getSelection().getSelectionEx();
 
     // only one sketch with its subelements are allowed to be selected
-    if (selection.size() != 1) {
+    if (selection.size() != 1 || !selection[0].isObjectTypeOf(Sketcher::SketchObject::getClassTypeId())) {
         ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/Mod/Sketcher");
         bool constraintMode = hGrp->GetBool("ContinuousConstraintMode", true);
 
         if (constraintMode) {
-        ActivateHandler(getActiveGuiDocument(),
-                new DrawSketchHandlerGenConstraint(constraintCursor, this));
-        getSelection().clearSelection();
+            ActivateHandler(getActiveGuiDocument(),
+                    new DrawSketchHandlerGenConstraint(constraintCursor, this));
+            getSelection().clearSelection();
         } else {
             // TODO: Get the exact message from git history and put it here
             strError = QObject::tr("Select some geometry from the sketch.", "perpendicular constraint");
@@ -3855,12 +3874,12 @@ void CmdSketcherConstrainPerpendicular::activated(int iMsg)
                                      QString::fromLatin1(e.what()));
                 Gui::Command::abortCommand();
 
-                tryAutoRecompute();
+                tryAutoRecompute(Obj);
                 return;
             }
 
             commitCommand();
-            tryAutoRecompute();
+            tryAutoRecompute(Obj);
 
             getSelection().clearSelection();
 
@@ -3900,7 +3919,7 @@ void CmdSketcherConstrainPerpendicular::activated(int iMsg)
                 Doc,"App.ActiveDocument.%s.addConstraint(Sketcher.Constraint('Perpendicular',%d,%d,%d,%d)) ",
                 selection[0].getFeatName(),GeoId1,PosId1,GeoId2,PosId2);
             commitCommand();
-            tryAutoRecompute();
+            tryAutoRecompute(Obj);
 
             getSelection().clearSelection();
             return;
@@ -3932,7 +3951,7 @@ void CmdSketcherConstrainPerpendicular::activated(int iMsg)
                 Doc,"App.ActiveDocument.%s.addConstraint(Sketcher.Constraint('Perpendicular',%d,%d,%d)) ",
                 selection[0].getFeatName(),GeoId1,PosId1,GeoId2);
             commitCommand();
-            tryAutoRecompute();
+            tryAutoRecompute(Obj);
             
             getSelection().clearSelection();
             return;
@@ -4034,7 +4053,7 @@ void CmdSketcherConstrainPerpendicular::activated(int iMsg)
                 }
                 else {
                     Base::Vector3d direction=point1-center;
-                    double tapprox=atan2(direction.y,direction.x)-phi; // we approximate the eccentric anomally by the polar
+                    double tapprox=atan2(direction.y,direction.x)-phi; // we approximate the eccentric anomaly by the polar
 
                     PoO = Base::Vector3d(center.x+majord*cos(tapprox)*cos(phi)-minord*sin(tapprox)*sin(phi),
                                                         center.y+majord*cos(tapprox)*sin(phi)+minord*sin(tapprox)*cos(phi), 0);
@@ -4064,12 +4083,12 @@ void CmdSketcherConstrainPerpendicular::activated(int iMsg)
                     Base::Console().Error("%s\n", e.what());
                     Gui::Command::abortCommand();
 
-                    tryAutoRecompute();
+                    tryAutoRecompute(Obj);
                     return;
                 }
 
                 commitCommand();
-                tryAutoRecompute();
+                tryAutoRecompute(Obj);
 
                 getSelection().clearSelection();
                 return;
@@ -4081,7 +4100,7 @@ void CmdSketcherConstrainPerpendicular::activated(int iMsg)
                 Doc,"App.ActiveDocument.%s.addConstraint(Sketcher.Constraint('Perpendicular',%d,%d)) ",
                 selection[0].getFeatName(),GeoId1,GeoId2);
             commitCommand();
-            tryAutoRecompute();
+            tryAutoRecompute(Obj);
             
             getSelection().clearSelection();
             return;
@@ -4211,7 +4230,7 @@ void CmdSketcherConstrainPerpendicular::applyConstraint(std::vector<SelIdPair> &
             }
             else {
                 Base::Vector3d direction=point1-center;
-                double tapprox=atan2(direction.y,direction.x)-phi; // we approximate the eccentric anomally by the polar
+                double tapprox=atan2(direction.y,direction.x)-phi; // we approximate the eccentric anomaly by the polar
 
                 PoO = Base::Vector3d(center.x+majord*cos(tapprox)*cos(phi)-minord*sin(tapprox)*sin(phi),
                                                     center.y+majord*cos(tapprox)*sin(phi)+minord*sin(tapprox)*cos(phi), 0);
@@ -4244,7 +4263,7 @@ void CmdSketcherConstrainPerpendicular::applyConstraint(std::vector<SelIdPair> &
             }
 
 
-            tryAutoRecompute();
+            tryAutoRecompute(Obj);
 
             getSelection().clearSelection();
             return;
@@ -4257,7 +4276,7 @@ void CmdSketcherConstrainPerpendicular::applyConstraint(std::vector<SelIdPair> &
             Obj->getNameInDocument(),GeoId1,GeoId2);
         commitCommand();
 
-        tryAutoRecompute();
+        tryAutoRecompute(Obj);
         return;
     }
     case 4: // {SelVertexOrRoot, SelEdge, SelEdgeOrAxis}
@@ -4320,12 +4339,12 @@ void CmdSketcherConstrainPerpendicular::applyConstraint(std::vector<SelIdPair> &
                                  QString::fromLatin1(e.what()));
             Gui::Command::abortCommand();
 
-            tryAutoRecompute();
+            tryAutoRecompute(Obj);
             return;
         }
 
         commitCommand();
-        tryAutoRecompute();
+        tryAutoRecompute(Obj);
 
         getSelection().clearSelection();
 
@@ -4389,14 +4408,14 @@ void CmdSketcherConstrainTangent::activated(int iMsg)
     std::vector<Gui::SelectionObject> selection = getSelection().getSelectionEx();
 
     // only one sketch with its subelements are allowed to be selected
-    if (selection.size() != 1) {
+    if (selection.size() != 1 || !selection[0].isObjectTypeOf(Sketcher::SketchObject::getClassTypeId())) {
         ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/Mod/Sketcher");
         bool constraintMode = hGrp->GetBool("ContinuousConstraintMode", true);
 
         if (constraintMode) {
-        ActivateHandler(getActiveGuiDocument(),
-                new DrawSketchHandlerGenConstraint(constraintCursor, this));
-        getSelection().clearSelection();
+            ActivateHandler(getActiveGuiDocument(),
+                    new DrawSketchHandlerGenConstraint(constraintCursor, this));
+            getSelection().clearSelection();
         } else {
             strError = QObject::tr("Select some geometry from the sketch.", "tangent constraint");
             if (!strError.isEmpty()) strError.append(QString::fromLatin1("\n\n"));
@@ -4475,12 +4494,12 @@ void CmdSketcherConstrainTangent::activated(int iMsg)
                                      QObject::tr("Error"),
                                      QString::fromLatin1(e.what()));
                 Gui::Command::abortCommand();
-                tryAutoRecompute();
+                tryAutoRecompute(Obj);
                 return;
             }
 
             commitCommand();
-            tryAutoRecompute();
+            tryAutoRecompute(Obj);
             
             getSelection().clearSelection();
 
@@ -4503,7 +4522,7 @@ void CmdSketcherConstrainTangent::activated(int iMsg)
             openCommand("add tangent constraint");
             doEndpointTangency(Obj, selection[0], GeoId1, GeoId2, PosId1, PosId2);
             commitCommand();
-            tryAutoRecompute();
+            tryAutoRecompute(Obj);
 
             getSelection().clearSelection();
             return;
@@ -4535,7 +4554,7 @@ void CmdSketcherConstrainTangent::activated(int iMsg)
                 Doc,"App.ActiveDocument.%s.addConstraint(Sketcher.Constraint('Tangent',%d,%d,%d)) ",
                 selection[0].getFeatName(),GeoId1,PosId1,GeoId2);
             commitCommand();
-            tryAutoRecompute();
+            tryAutoRecompute(Obj);
             
             getSelection().clearSelection();
             return;
@@ -4683,7 +4702,7 @@ void CmdSketcherConstrainTangent::activated(int iMsg)
                 Doc,"App.ActiveDocument.%s.addConstraint(Sketcher.Constraint('Tangent',%d,%d)) ",
                 selection[0].getFeatName(),GeoId1,GeoId2);
             commitCommand();
-            tryAutoRecompute();
+            tryAutoRecompute(Obj);
 
             getSelection().clearSelection();
             return;
@@ -4828,7 +4847,7 @@ void CmdSketcherConstrainTangent::applyConstraint(std::vector<SelIdPair> &selSeq
             Doc,"App.ActiveDocument.%s.addConstraint(Sketcher.Constraint('Tangent',%d,%d)) ",
             Obj->getNameInDocument(),GeoId1,GeoId2);
         commitCommand();
-        tryAutoRecompute();
+        tryAutoRecompute(Obj);
 
         return;
     }
@@ -4887,7 +4906,7 @@ void CmdSketcherConstrainTangent::applyConstraint(std::vector<SelIdPair> &selSeq
             Doc,"App.ActiveDocument.%s.addConstraint(Sketcher.Constraint('Tangent',%d,%d,%d,%d)) ",
             Obj->getNameInDocument(),GeoId1,PosId1,GeoId2,PosId2);
         commitCommand();
-        tryAutoRecompute();
+        tryAutoRecompute(Obj);
 
         getSelection().clearSelection();
         return;
@@ -4930,12 +4949,12 @@ void CmdSketcherConstrainTangent::applyConstraint(std::vector<SelIdPair> &selSeq
                                  QString::fromLatin1(e.what()));
             Gui::Command::abortCommand();
 
-            tryAutoRecompute();
+            tryAutoRecompute(Obj);
             return;
         }
 
         commitCommand();
-        tryAutoRecompute();
+        tryAutoRecompute(Obj);
 
         getSelection().clearSelection();
 
@@ -4982,14 +5001,14 @@ void CmdSketcherConstrainRadius::activated(int iMsg)
     std::vector<Gui::SelectionObject> selection = getSelection().getSelectionEx();
 
     // only one sketch with its subelements are allowed to be selected
-    if (selection.size() != 1) {
+    if (selection.size() != 1 || !selection[0].isObjectTypeOf(Sketcher::SketchObject::getClassTypeId())) {
         ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/Mod/Sketcher");
         bool constraintMode = hGrp->GetBool("ContinuousConstraintMode", true);
 
         if (constraintMode) {
-        ActivateHandler(getActiveGuiDocument(),
-                new DrawSketchHandlerGenConstraint(constraintCursor, this));
-        getSelection().clearSelection();
+            ActivateHandler(getActiveGuiDocument(),
+                    new DrawSketchHandlerGenConstraint(constraintCursor, this));
+            getSelection().clearSelection();
         } else {
             // TODO: Get the exact message from git history and put it here
             QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
@@ -5230,7 +5249,7 @@ void CmdSketcherConstrainRadius::activated(int iMsg)
                         Obj->solve();
                     }
 
-                    tryAutoRecompute();
+                    tryAutoRecompute(Obj);
                     
                     commitNeeded=false;
                     updateNeeded=false;
@@ -5363,7 +5382,7 @@ void CmdSketcherConstrainRadius::applyConstraint(std::vector<SelIdPair> &selSeq,
                         Obj->solve();
                     }
 
-                    tryAutoRecompute();
+                    tryAutoRecompute(Obj);
 
                     commitNeeded=false;
                     updateNeeded=false;
@@ -5453,7 +5472,7 @@ void CmdSketcherConstrainDiameter::activated(int iMsg)
     std::vector<Gui::SelectionObject> selection = getSelection().getSelectionEx();
     
     // only one sketch with its subelements are allowed to be selected
-    if (selection.size() != 1) {
+    if (selection.size() != 1 || !selection[0].isObjectTypeOf(Sketcher::SketchObject::getClassTypeId())) {
         ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/Mod/Sketcher");
         bool constraintMode = hGrp->GetBool("ContinuousConstraintMode", true);
         
@@ -5701,7 +5720,7 @@ void CmdSketcherConstrainDiameter::activated(int iMsg)
                         Obj->solve();
                     }
                     
-                    tryAutoRecompute();
+                    tryAutoRecompute(Obj);
                     
                     commitNeeded=false;
                     updateNeeded=false;
@@ -5834,7 +5853,7 @@ void CmdSketcherConstrainDiameter::applyConstraint(std::vector<SelIdPair> &selSe
                             Obj->solve();
                         }
                         
-                        tryAutoRecompute();
+                        tryAutoRecompute(Obj);
                         
                         commitNeeded=false;
                         updateNeeded=false;
@@ -6044,14 +6063,14 @@ void CmdSketcherConstrainAngle::activated(int iMsg)
     std::vector<Gui::SelectionObject> selection = getSelection().getSelectionEx();
 
     // only one sketch with its subelements are allowed to be selected
-    if (selection.size() != 1) {
+    if (selection.size() != 1 || !selection[0].isObjectTypeOf(Sketcher::SketchObject::getClassTypeId())) {
         ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/Mod/Sketcher");
         bool constraintMode = hGrp->GetBool("ContinuousConstraintMode", true);
 
         if (constraintMode) {
-        ActivateHandler(getActiveGuiDocument(),
-                new DrawSketchHandlerGenConstraint(constraintCursor, this));
-        getSelection().clearSelection();
+            ActivateHandler(getActiveGuiDocument(),
+                    new DrawSketchHandlerGenConstraint(constraintCursor, this));
+            getSelection().clearSelection();
         } else {
             // TODO: Get the exact message from git history and put it here
             QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
@@ -6545,7 +6564,7 @@ void CmdSketcherConstrainEqual::activated(int iMsg)
     std::vector<Gui::SelectionObject> selection = getSelection().getSelectionEx();
 
     // only one sketch with its subelements are allowed to be selected
-    if (selection.size() != 1) {
+    if (selection.size() != 1 || !selection[0].isObjectTypeOf(Sketcher::SketchObject::getClassTypeId())) {
         ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/Mod/Sketcher");
         bool constraintMode = hGrp->GetBool("ContinuousConstraintMode", true);
 
@@ -6574,6 +6593,7 @@ void CmdSketcherConstrainEqual::activated(int iMsg)
 
     std::vector<int> ids;
     bool lineSel = false, arcSel = false, circSel = false, ellipsSel = false, arcEllipsSel=false, hasAlreadyExternal = false;
+    bool hyperbSel = false, parabSel=false;
 
     for (std::vector<std::string>::const_iterator it=SubNames.begin(); it != SubNames.end(); ++it) {
 
@@ -6586,18 +6606,20 @@ void CmdSketcherConstrainEqual::activated(int iMsg)
                                  QObject::tr("Select two or more compatible edges"));
             return;
         }
-        else if (isPointOrSegmentFixed(Obj,GeoId)) {
-            if (GeoId == Sketcher::GeoEnum::HAxis || GeoId == Sketcher::GeoEnum::VAxis) {
+        else if (GeoId == Sketcher::GeoEnum::HAxis || GeoId == Sketcher::GeoEnum::VAxis) {
                 QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
                                      QObject::tr("Sketch axes cannot be used in equality constraints"));
                 return;
-            }
-            else if (hasAlreadyExternal) {
+        }
+        else if (isPointOrSegmentFixed(Obj,GeoId)) {
+
+            if (hasAlreadyExternal) {
                 showNoConstraintBetweenFixedGeometry();
                 return;
             }
-            else
+            else {
                 hasAlreadyExternal = true;
+            }
         }
         
         const Part::Geometry *geo = Obj->getGeometry(GeoId);
@@ -6609,16 +6631,20 @@ void CmdSketcherConstrainEqual::activated(int iMsg)
             return;
         }
         
-        if (geo->getTypeId() != Part::GeomLineSegment::getClassTypeId())
+        if (geo->getTypeId() == Part::GeomLineSegment::getClassTypeId())
             lineSel = true;
-        else if (geo->getTypeId() != Part::GeomArcOfCircle::getClassTypeId())
+        else if (geo->getTypeId() == Part::GeomArcOfCircle::getClassTypeId())
             arcSel = true;
-        else if (geo->getTypeId() != Part::GeomCircle::getClassTypeId()) 
+        else if (geo->getTypeId() == Part::GeomCircle::getClassTypeId()) 
             circSel = true;
-        else if (geo->getTypeId() != Part::GeomEllipse::getClassTypeId()) 
+        else if (geo->getTypeId() == Part::GeomEllipse::getClassTypeId()) 
             ellipsSel = true;
-        else if (geo->getTypeId() != Part::GeomArcOfEllipse::getClassTypeId()) 
+        else if (geo->getTypeId() == Part::GeomArcOfEllipse::getClassTypeId()) 
             arcEllipsSel = true;
+        else if (geo->getTypeId() == Part::GeomArcOfHyperbola::getClassTypeId()) 
+            hyperbSel = true;
+        else if (geo->getTypeId() == Part::GeomArcOfParabola::getClassTypeId()) 
+            parabSel = true;
         else {
             QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
                 QObject::tr("Select two or more edges of similar type"));
@@ -6628,7 +6654,12 @@ void CmdSketcherConstrainEqual::activated(int iMsg)
         ids.push_back(GeoId);
     }
 
-    if (lineSel && (arcSel || circSel) && (ellipsSel || arcEllipsSel)) {
+    // Check for heterogeneous groups in selection
+    if ( (lineSel && ((arcSel || circSel) || (ellipsSel || arcEllipsSel) || hyperbSel || parabSel) ) ||
+         ((arcSel || circSel) && ((ellipsSel || arcEllipsSel) || hyperbSel || parabSel)) ||
+         ((ellipsSel || arcEllipsSel) && (hyperbSel || parabSel)) ||
+         (hyperbSel && parabSel) ) {
+        
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
             QObject::tr("Select two or more edges of similar type"));
         return;
@@ -6642,7 +6673,7 @@ void CmdSketcherConstrainEqual::activated(int iMsg)
     }
     // finish the transaction and update
     commitCommand();
-    tryAutoRecompute();
+    tryAutoRecompute(Obj);
 
     // clear the selection (convenience)
     getSelection().clearSelection();
@@ -6675,7 +6706,7 @@ void CmdSketcherConstrainEqual::applyConstraint(std::vector<SelIdPair> &selSeq, 
             Obj->getNameInDocument(), GeoId1, GeoId2);
         // finish the transaction and update
         commitCommand();
-        tryAutoRecompute();
+        tryAutoRecompute(Obj);
 
         return;
     }
@@ -6731,7 +6762,7 @@ void CmdSketcherConstrainSymmetric::activated(int iMsg)
     std::vector<Gui::SelectionObject> selection = getSelection().getSelectionEx();
 
     // only one sketch with its subelements are allowed to be selected
-    if (selection.size() != 1) {
+    if (selection.size() != 1 || !selection[0].isObjectTypeOf(Sketcher::SketchObject::getClassTypeId())) {
         ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/Mod/Sketcher");
         bool constraintMode = hGrp->GetBool("ContinuousConstraintMode", true);
 
@@ -6789,7 +6820,7 @@ void CmdSketcherConstrainSymmetric::activated(int iMsg)
 
                 // finish the transaction and update
                 commitCommand();
-                tryAutoRecompute();
+                tryAutoRecompute(Obj);
 
                 // clear the selection (convenience)
                 getSelection().clearSelection();
@@ -6839,7 +6870,7 @@ void CmdSketcherConstrainSymmetric::activated(int iMsg)
 
                 // finish the transaction and update
                 commitCommand();
-                tryAutoRecompute();
+                tryAutoRecompute(Obj);
 
                 // clear the selection (convenience)
                 getSelection().clearSelection();
@@ -6855,7 +6886,7 @@ void CmdSketcherConstrainSymmetric::activated(int iMsg)
 
             // finish the transaction and update
             commitCommand();
-            tryAutoRecompute();
+            tryAutoRecompute(Obj);
 
             // clear the selection (convenience)
             getSelection().clearSelection();
@@ -6924,7 +6955,7 @@ void CmdSketcherConstrainSymmetric::applyConstraint(std::vector<SelIdPair> &selS
 
             // finish the transaction and update
             commitCommand();
-            tryAutoRecompute();
+            tryAutoRecompute(Obj);
         }
         else {
             QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
@@ -6960,7 +6991,7 @@ void CmdSketcherConstrainSymmetric::applyConstraint(std::vector<SelIdPair> &selS
     // finish the transaction and update
     commitCommand();
 
-    tryAutoRecompute();
+    tryAutoRecompute(Obj);
 
     // clear the selection (convenience)
     getSelection().clearSelection();
@@ -7000,20 +7031,20 @@ void CmdSketcherConstrainSnellsLaw::activated(int iMsg)
     try{
         // get the selection
         std::vector<Gui::SelectionObject> selection = getSelection().getSelectionEx();
-        Sketcher::SketchObject* Obj = static_cast<Sketcher::SketchObject*>(selection[0].getObject());
 
         // only one sketch with its subelements are allowed to be selected
-        if (selection.size() != 1) {
+        if (selection.size() != 1 || !selection[0].isObjectTypeOf(Sketcher::SketchObject::getClassTypeId())) {
             strError = QObject::tr("Selected objects are not just geometry from one sketch.", dmbg);
-            throw(Base::Exception(""));
+            throw Base::ValueError("");
         }
 
         // get the needed lists and objects
+        Sketcher::SketchObject* Obj = static_cast<Sketcher::SketchObject*>(selection[0].getObject());
         const std::vector<std::string> &SubNames = selection[0].getSubNames();
 
         if (SubNames.size() != 3) {
             strError = QObject::tr("Number of selected objects is not 3 (is %1).", dmbg).arg(SubNames.size());
-            throw(Base::Exception(""));
+            throw Base::ValueError("");
         }
 
         int GeoId1, GeoId2, GeoId3;
@@ -7035,14 +7066,14 @@ void CmdSketcherConstrainSnellsLaw::activated(int iMsg)
         //a bunch of validity checks       
         if (areAllPointsOrSegmentsFixed(Obj, GeoId1, GeoId2, GeoId3) ) {
             strError = QObject::tr("Can not create constraint with external geometry only!!", dmbg);
-            throw(Base::Exception(""));
+            throw Base::ValueError("");
         }
 
         if (!(isVertex(GeoId1,PosId1) && !isSimpleVertex(Obj, GeoId1, PosId1) &&
               isVertex(GeoId2,PosId2) && !isSimpleVertex(Obj, GeoId2, PosId2) &&
               isEdge(GeoId3,PosId3)   )) {
             strError = QObject::tr("Incompatible geometry is selected!", dmbg);
-            throw(Base::Exception(""));
+            throw Base::ValueError("");
         };
         
         const Part::Geometry *geo = Obj->getGeometry(GeoId3);
@@ -7104,7 +7135,7 @@ void CmdSketcherConstrainSnellsLaw::activated(int iMsg)
         }*/            
         
         commitCommand();
-        tryAutoRecompute();
+        tryAutoRecompute(Obj);
 
         // clear the selection (convenience)
         getSelection().clearSelection();
@@ -7145,7 +7176,7 @@ void CmdSketcherConstrainInternalAlignment::activated(int iMsg)
     std::vector<Gui::SelectionObject> selection = getSelection().getSelectionEx();
 
     // only one sketch with its subelements are allowed to be selected
-    if (selection.size() != 1) {
+    if (selection.size() != 1 || !selection[0].isObjectTypeOf(Sketcher::SketchObject::getClassTypeId())) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
             QObject::tr("Select at least one ellipse and one edge from the sketch."));
         return;
@@ -7351,7 +7382,7 @@ void CmdSketcherConstrainInternalAlignment::activated(int iMsg)
             // finish the transaction and update
             commitCommand();
 
-            tryAutoRecompute();
+            tryAutoRecompute(Obj);
 
             if(extra_elements){
                 QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Extra elements"),
@@ -7510,7 +7541,7 @@ void CmdSketcherConstrainInternalAlignment::activated(int iMsg)
             // finish the transaction and update
             commitCommand();
 
-            tryAutoRecompute();
+            tryAutoRecompute(Obj);
 
             if(extra_elements){
                 QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Extra elements"),
@@ -7580,7 +7611,7 @@ void CmdSketcherToggleDrivingConstraint::activated(int iMsg)
         selection = getSelection().getSelectionEx();
 
         // only one sketch with its subelements are allowed to be selected
-        if (selection.size() != 1) {
+        if (selection.size() != 1 || !selection[0].isObjectTypeOf(Sketcher::SketchObject::getClassTypeId())) {
             QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
                 QObject::tr("Select constraint(s) from the sketch."));
             return;
@@ -7616,6 +7647,8 @@ void CmdSketcherToggleDrivingConstraint::activated(int iMsg)
     }
     else // toggle the selected constraint(s)
     {
+        Sketcher::SketchObject* Obj = static_cast<Sketcher::SketchObject*>(selection[0].getObject());
+        
         // get the needed lists and objects
         const std::vector<std::string> &SubNames = selection[0].getSubNames();
         if (SubNames.empty()) {
@@ -7648,7 +7681,7 @@ void CmdSketcherToggleDrivingConstraint::activated(int iMsg)
         else
             abortCommand();
 
-        tryAutoRecompute();
+        tryAutoRecompute(Obj);
 
         // clear the selection (convenience)
         getSelection().clearSelection();

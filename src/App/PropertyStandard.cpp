@@ -377,6 +377,11 @@ const char ** PropertyEnumeration::getEnums(void) const
     return _enum.getEnums();
 }
 
+bool PropertyEnumeration::isValid(void) const
+{
+    return _enum.isValid();
+}
+
 void PropertyEnumeration::Save(Base::Writer &writer) const
 {
     writer.Stream() << writer.ind() << "<Integer value=\"" <<  _enum.getInt() <<"\"";
@@ -1365,7 +1370,7 @@ void PropertyFloatList::Restore(Base::XMLReader &reader)
     string file (reader.getAttribute("file") );
 
     if (!file.empty()) {
-        // initate a file read
+        // initiate a file read
         reader.addFile(file.c_str(),this);
     }
 }
@@ -1375,7 +1380,7 @@ void PropertyFloatList::SaveDocFile (Base::Writer &writer) const
     Base::OutputStream str(writer.Stream());
     uint32_t uCt = (uint32_t)getSize();
     str << uCt;
-    if (writer.getFileVersion() > 0) {
+    if (!isSinglePrecision()) {
         for (std::vector<double>::const_iterator it = _lValueList.begin(); it != _lValueList.end(); ++it) {
             str << *it;
         }
@@ -1394,7 +1399,7 @@ void PropertyFloatList::RestoreDocFile(Base::Reader &reader)
     uint32_t uCt=0;
     str >> uCt;
     std::vector<double> values(uCt);
-    if (reader.getFileVersion() > 0) {
+    if (!isSinglePrecision()) {
         for (std::vector<double>::iterator it = values.begin(); it != values.end(); ++it) {
             str >> *it;
         }
@@ -2603,7 +2608,7 @@ void PropertyColorList::Restore(Base::XMLReader &reader)
         std::string file (reader.getAttribute("file"));
 
         if (!file.empty()) {
-            // initate a file read
+            // initiate a file read
             reader.addFile(file.c_str(),this);
         }
     }
@@ -2882,7 +2887,7 @@ void PropertyMaterialList::Restore(Base::XMLReader &reader)
         std::string file(reader.getAttribute("file"));
 
         if (!file.empty()) {
-            // initate a file read
+            // initiate a file read
             reader.addFile(file.c_str(), this);
         }
     }

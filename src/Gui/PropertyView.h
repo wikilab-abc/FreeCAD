@@ -28,7 +28,7 @@
 
 #include "DockWindow.h"
 #include "Selection.h"
-#include <boost/signals.hpp>
+#include <boost/signals2.hpp>
 
 class QPixmap;
 class QTabWidget;
@@ -79,16 +79,18 @@ private:
     void slotAppendDynamicProperty(const App::Property&);
     void slotRemoveDynamicProperty(const App::Property&);
     void slotChangePropertyEditor(const App::Property&);
+    void slotActiveDocument(const Gui::Document&);
 
 private:
     struct PropInfo;
     struct PropFind;
-    typedef boost::BOOST_SIGNALS_NAMESPACE::connection Connection;
+    typedef boost::signals2::connection Connection;
     Connection connectPropData;
     Connection connectPropView;
     Connection connectPropAppend;
     Connection connectPropRemove;
     Connection connectPropChange;
+    Connection connectActiveDoc;
     QTabWidget* tabs;
 };
 

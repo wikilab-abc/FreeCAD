@@ -32,6 +32,7 @@
 #include <Gui/DockWindow.h>
 #include <Gui/Selection.h>
 
+class QLineEdit;
 
 namespace Gui {
 
@@ -42,12 +43,13 @@ typedef std::shared_ptr<DocumentObjectItems> DocumentObjectItemsPtr;
 class DocumentItem;
 
 /// highlight modes for the tree items
-enum HighlightMode {    Underlined,
-                        Italic    ,
-                        Overlined ,
-                        Bold      ,
-                        Blue      ,
-                        LightBlue
+enum HighlightMode {  Underlined,
+                      Italic,
+                      Overlined,
+                      Bold,
+                      Blue,
+                      LightBlue,
+                      UserDefined
 };
 
 /// highlight modes for the tree items
@@ -96,6 +98,8 @@ protected:
     bool event(QEvent *e);
     void keyPressEvent(QKeyEvent *event);
     void mouseDoubleClickEvent(QMouseEvent * event);
+    QList<App::DocumentObject *> buildListChildren(QTreeWidgetItem* targetitem,
+                                                   Gui::ViewProviderDocumentObject* vp);
 
 protected Q_SLOTS:
     void onCreateGroup();
@@ -105,6 +109,7 @@ protected Q_SLOTS:
     void onFinishEditing();
     void onSkipRecompute(bool on);
     void onMarkRecompute();
+    void onSearchObjects();
 
 private Q_SLOTS:
     void onItemSelectionChanged(void);
@@ -112,6 +117,9 @@ private Q_SLOTS:
     void onItemCollapsed(QTreeWidgetItem * item);
     void onItemExpanded(QTreeWidgetItem * item);
     void onTestStatus(void);
+
+Q_SIGNALS:
+    void emitSearchObjects();
 
 private:
     void slotNewDocument(const Gui::Document&);
@@ -128,6 +136,7 @@ private:
     QAction* finishEditingAction;
     QAction* skipRecomputeAction;
     QAction* markRecomputeAction;
+    QAction* searchObjectsAction;
     QTreeWidgetItem* contextItem;
 
     QTreeWidgetItem* rootItem;
@@ -184,7 +193,7 @@ private:
     const Gui::Document* pDocument;
     std::map<std::string,DocumentObjectItemsPtr> ObjectMap;
 
-    typedef boost::BOOST_SIGNALS_NAMESPACE::connection Connection;
+    typedef boost::signals2::connection Connection;
     Connection connectNewObject;
     Connection connectDelObject;
     Connection connectChgObject;
@@ -222,7 +231,7 @@ protected:
     void slotChangeStatusTip(const QString&);
 
 private:
-    typedef boost::BOOST_SIGNALS_NAMESPACE::connection Connection;
+    typedef boost::signals2::connection Connection;
     int previousStatus;
     Gui::ViewProviderDocumentObject* viewObject;
     Connection connectIcon;
@@ -234,6 +243,32 @@ private:
 
     friend class TreeWidget;
     friend class DocumentItem;
+};
+
+class TreePanel : public QWidget
+{
+    Q_OBJECT
+
+public:
+    TreePanel(QWidget* parent=nullptr);
+    virtual ~TreePanel();
+
+    bool eventFilter(QObject *obj, QEvent *ev);
+
+private Q_SLOTS:
+    void accept();
+    void showEditor();
+    void hideEditor();
+    void findMatchingItems(const QString&);
+
+private:
+    void searchTreeItem(QTreeWidgetItem* item, const QString& text);
+    void selectTreeItem(QTreeWidgetItem* item, const QString& text);
+    void resetBackground(QTreeWidgetItem* item);
+
+private:
+    QLineEdit* searchBox;
+    QTreeWidget* treeWidget;
 };
 
 /**

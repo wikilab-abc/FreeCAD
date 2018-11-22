@@ -26,7 +26,6 @@
 #ifndef _PreComp_
 # include <assert.h>
 # include <string>
-# include <boost/signals.hpp>
 # include <boost/bind.hpp>
 # include <QApplication>
 # include <QString>
@@ -49,12 +48,12 @@
 #include <Gui/SelectionObjectPy.h>
 #include "MainWindow.h"
 
-
+FC_LOG_LEVEL_INIT("Selection",false,true,true)
 
 using namespace Gui;
 using namespace std;
 
-SelectionObserver::SelectionObserver()
+SelectionObserver::SelectionObserver() : blockSelection(false)
 {
     attachSelection();
 }
@@ -66,24 +65,39 @@ SelectionObserver::~SelectionObserver()
 
 bool SelectionObserver::blockConnection(bool block)
 {
-    bool ok = connectSelection.blocked();
+    bool ok = blockSelection;
     if (block)
-        connectSelection.block();
+        blockSelection = true;
     else
-        connectSelection.unblock();
+        blockSelection = false;
     return ok;
 }
 
 bool SelectionObserver::isConnectionBlocked() const
 {
-    return connectSelection.blocked();
+    return blockSelection;
 }
 
 void SelectionObserver::attachSelection()
 {
     if (!connectSelection.connected()) {
         connectSelection = Selection().signalSelectionChanged.connect(boost::bind
-            (&SelectionObserver::onSelectionChanged, this, _1));
+            (&SelectionObserver::_onSelectionChanged, this, _1));
+    }
+}
+
+void SelectionObserver::_onSelectionChanged(const SelectionChanges& msg) {
+    try {
+        if (blockSelection)
+            return;
+        onSelectionChanged(msg);
+    } catch (Base::Exception &e) {
+        e.ReportException();
+        FC_ERR("Unhandled Base::Exception caught in selection observer: ");
+    } catch (std::exception &e) {
+        FC_ERR("Unhandled std::exception caught in selection observer: " << e.what());
+    } catch (...) {
+        FC_ERR("Unhandled unknown exception caught in selection observer");
     }
 }
 
@@ -726,12 +740,21 @@ bool SelectionSingleton::addSelection(const char* pDocName, const char* pObjectN
 
         temp.DocName  = pDocName;
         temp.FeatName = pObjectName ? pObjectName : "";
-        for (std::vector<std::string>::const_iterator it = pSubNames.begin(); it != pSubNames.end(); ++it) {
-            temp.SubName  = it->c_str();
+        if (!pSubNames.empty()) {
+            for (std::vector<std::string>::const_iterator it = pSubNames.begin(); it != pSubNames.end(); ++it) {
+                temp.SubName  = it->c_str();
+                temp.x        = 0;
+                temp.y        = 0;
+                temp.z        = 0;
+
+                _SelList.push_back(temp);
+            }
+        }
+        else {
+            temp.SubName  = "";
             temp.x        = 0;
             temp.y        = 0;
             temp.z        = 0;
-
             _SelList.push_back(temp);
         }
 
@@ -753,16 +776,49 @@ bool SelectionSingleton::addSelection(const char* pDocName, const char* pObjectN
         return true;
     }
     else {
-        // neither an existing nor active document available 
+        // neither an existing nor active document available
         // this can often happen when importing .iv files
         Base::Console().Error("Cannot add to selection: no document '%s' found.\n", pDocName);
         return false;
     }
 }
 
+bool SelectionSingleton::addSelection(const SelectionObject& obj)
+{
+    const std::vector<std::string>& subNames = obj.getSubNames();
+    const std::vector<Base::Vector3d> points = obj.getPickedPoints();
+    if (!subNames.empty() && subNames.size() == points.size()) {
+        bool ok = true;
+        for (std::size_t i=0; i<subNames.size(); i++) {
+            const std::string& name = subNames[i];
+            const Base::Vector3d& pnt = points[i];
+            ok &= addSelection(obj.getDocName(), obj.getFeatName(), name.c_str(),
+                               static_cast<float>(pnt.x),
+                               static_cast<float>(pnt.y),
+                               static_cast<float>(pnt.z));
+        }
+        return ok;
+    }
+    else if (!subNames.empty()) {
+        bool ok = true;
+        for (std::size_t i=0; i<subNames.size(); i++) {
+            const std::string& name = subNames[i];
+            ok &= addSelection(obj.getDocName(), obj.getFeatName(), name.c_str());
+        }
+        return ok;
+    }
+    else {
+        return addSelection(obj.getDocName(), obj.getFeatName());
+    }
+}
+
 void SelectionSingleton::rmvSelection(const char* pDocName, const char* pObjectName, const char* pSubName)
 {
-    std::vector<SelectionChanges> rmvList;
+    bool foundSelection = false;
+    std::string tmpDocName;
+    std::string tmpFeaName;
+    std::string tmpSubName;
+    std::string tmpTypName;
 
     for (std::list<_SelObj>::iterator It = _SelList.begin();It != _SelList.end();) {
         if ((It->DocName == pDocName && !pObjectName) ||
@@ -770,25 +826,16 @@ void SelectionSingleton::rmvSelection(const char* pDocName, const char* pObjectN
             (It->DocName == pDocName && pObjectName && It->FeatName == pObjectName && pSubName && It->SubName == pSubName))
         {
             // save in tmp. string vars
-            std::string tmpDocName = It->DocName;
-            std::string tmpFeaName = It->FeatName;
-            std::string tmpSubName = It->SubName;
-            std::string tmpTypName = It->TypeName;
+            tmpDocName = It->DocName;
+            tmpFeaName = It->FeatName;
+            tmpSubName = It->SubName;
+            tmpTypName = It->TypeName;
 
             // destroy the _SelObj item
             It = _SelList.erase(It);
 
-            SelectionChanges Chng;
-            Chng.pDocName  = tmpDocName.c_str();
-            Chng.pObjectName = tmpFeaName.c_str();
-            Chng.pSubName  = tmpSubName.c_str();
-            Chng.pTypeName = tmpTypName.c_str();
-            Chng.Type      = SelectionChanges::RmvSelection;
+            foundSelection = true;
 
-            Notify(Chng);
-            signalSelectionChanged(Chng);
-
-            rmvList.push_back(Chng);
 #ifdef FC_DEBUG
             Base::Console().Log("Sel : Rmv Selection \"%s.%s.%s\"\n",pDocName,pObjectName,pSubName);
 #endif
@@ -796,6 +843,22 @@ void SelectionSingleton::rmvSelection(const char* pDocName, const char* pObjectN
         else {
             ++It;
         }
+    }
+
+    // NOTE: It can happen that there are nested calls of rmvSelection()
+    // so that it's not safe to invoke the notifications inside the loop
+    // as this can invalidate the iterators and thus leads to undefined
+    // behaviour.
+    // So, the notification is done after the loop, see also #0003469
+    if (foundSelection) {
+        SelectionChanges Chng;
+        Chng.pDocName  = tmpDocName.c_str();
+        Chng.pObjectName = tmpFeaName.c_str();
+        Chng.pSubName  = tmpSubName.c_str();
+        Chng.pTypeName = tmpTypName.c_str();
+        Chng.Type      = SelectionChanges::RmvSelection;
+        Notify(Chng);
+        signalSelectionChanged(Chng);
     }
 }
 
@@ -1026,7 +1089,7 @@ PyMethodDef SelectionSingleton::Methods[] = {
      "second argumeht defines the document name. If no document name is given the\n"
      "currently active document is used"},
     {"getSelection",         (PyCFunction) SelectionSingleton::sGetSelection, METH_VARARGS,
-     "getSelection([string]) -- Return a list of selected objets\n"
+     "getSelection([string]) -- Return a list of selected objects\n"
      "Return a list of selected objects for a given document name. If no\n"
      "document name is given the selection for the active document is returned."},
     {"getCompleteSelection", (PyCFunction) SelectionSingleton::sGetCompleteSelection, METH_VARARGS,
@@ -1066,7 +1129,7 @@ PyMethodDef SelectionSingleton::Methods[] = {
     {NULL, NULL, 0, NULL}  /* Sentinel */
 };
 
-PyObject *SelectionSingleton::sAddSelection(PyObject * /*self*/, PyObject *args, PyObject * /*kwd*/)
+PyObject *SelectionSingleton::sAddSelection(PyObject * /*self*/, PyObject *args)
 {
     PyObject *object;
     char* subname=0;
@@ -1117,7 +1180,7 @@ PyObject *SelectionSingleton::sAddSelection(PyObject * /*self*/, PyObject *args,
     return 0;
 }
 
-PyObject *SelectionSingleton::sRemoveSelection(PyObject * /*self*/, PyObject *args, PyObject * /*kwd*/)
+PyObject *SelectionSingleton::sRemoveSelection(PyObject * /*self*/, PyObject *args)
 {
     PyObject *object;
     char* subname=0;
@@ -1138,7 +1201,7 @@ PyObject *SelectionSingleton::sRemoveSelection(PyObject * /*self*/, PyObject *ar
     Py_Return;
 }
 
-PyObject *SelectionSingleton::sClearSelection(PyObject * /*self*/, PyObject *args, PyObject * /*kwd*/)
+PyObject *SelectionSingleton::sClearSelection(PyObject * /*self*/, PyObject *args)
 {
     char *documentName=0;
     if (!PyArg_ParseTuple(args, "|s", &documentName))
@@ -1147,7 +1210,7 @@ PyObject *SelectionSingleton::sClearSelection(PyObject * /*self*/, PyObject *arg
     Py_Return;
 }
 
-PyObject *SelectionSingleton::sIsSelected(PyObject * /*self*/, PyObject *args, PyObject * /*kwd*/)
+PyObject *SelectionSingleton::sIsSelected(PyObject * /*self*/, PyObject *args)
 {
     PyObject *object;
     char* subname=0;
@@ -1159,7 +1222,7 @@ PyObject *SelectionSingleton::sIsSelected(PyObject * /*self*/, PyObject *args, P
     return Py_BuildValue("O", (ok ? Py_True : Py_False));
 }
 
-PyObject *SelectionSingleton::sCountObjectsOfType(PyObject * /*self*/, PyObject *args, PyObject * /*kwd*/)
+PyObject *SelectionSingleton::sCountObjectsOfType(PyObject * /*self*/, PyObject *args)
 {
     char* objecttype;
     char* document=0;
@@ -1174,7 +1237,7 @@ PyObject *SelectionSingleton::sCountObjectsOfType(PyObject * /*self*/, PyObject 
 #endif
 }
 
-PyObject *SelectionSingleton::sGetSelection(PyObject * /*self*/, PyObject *args, PyObject * /*kwd*/)
+PyObject *SelectionSingleton::sGetSelection(PyObject * /*self*/, PyObject *args)
 {
     char *documentName=0;
     if (!PyArg_ParseTuple(args, "|s", &documentName))
@@ -1195,7 +1258,7 @@ PyObject *SelectionSingleton::sGetSelection(PyObject * /*self*/, PyObject *args,
     }
 }
 
-PyObject *SelectionSingleton::sGetPreselection(PyObject * /*self*/, PyObject *args, PyObject * /*kwd*/)
+PyObject *SelectionSingleton::sGetPreselection(PyObject * /*self*/, PyObject *args)
 {
     if (!PyArg_ParseTuple(args, ""))
         return NULL;
@@ -1205,7 +1268,7 @@ PyObject *SelectionSingleton::sGetPreselection(PyObject * /*self*/, PyObject *ar
     return obj.getPyObject();
 }
 
-PyObject *SelectionSingleton::sRemPreselection(PyObject * /*self*/, PyObject *args, PyObject * /*kwd*/)
+PyObject *SelectionSingleton::sRemPreselection(PyObject * /*self*/, PyObject *args)
 {
     if (!PyArg_ParseTuple(args, ""))
         return NULL;
@@ -1214,7 +1277,7 @@ PyObject *SelectionSingleton::sRemPreselection(PyObject * /*self*/, PyObject *ar
     Py_Return;
 }
 
-PyObject *SelectionSingleton::sGetCompleteSelection(PyObject * /*self*/, PyObject *args, PyObject * /*kwd*/)
+PyObject *SelectionSingleton::sGetCompleteSelection(PyObject * /*self*/, PyObject *args)
 {
     if (!PyArg_ParseTuple(args, ""))
         return NULL;
@@ -1234,7 +1297,7 @@ PyObject *SelectionSingleton::sGetCompleteSelection(PyObject * /*self*/, PyObjec
     }
 }
 
-PyObject *SelectionSingleton::sGetSelectionEx(PyObject * /*self*/, PyObject *args, PyObject * /*kwd*/)
+PyObject *SelectionSingleton::sGetSelectionEx(PyObject * /*self*/, PyObject *args)
 {
     char *documentName=0;
     if (!PyArg_ParseTuple(args, "|s", &documentName))
@@ -1255,7 +1318,7 @@ PyObject *SelectionSingleton::sGetSelectionEx(PyObject * /*self*/, PyObject *arg
     }
 }
 
-PyObject *SelectionSingleton::sGetSelectionObject(PyObject * /*self*/, PyObject *args, PyObject * /*kwd*/)
+PyObject *SelectionSingleton::sGetSelectionObject(PyObject * /*self*/, PyObject *args)
 {
     char *docName, *objName, *subName;
     PyObject* tuple=0;
@@ -1290,7 +1353,7 @@ PyObject *SelectionSingleton::sGetSelectionObject(PyObject * /*self*/, PyObject 
     }
 }
 
-PyObject *SelectionSingleton::sAddSelObserver(PyObject * /*self*/, PyObject *args, PyObject * /*kwd*/)
+PyObject *SelectionSingleton::sAddSelObserver(PyObject * /*self*/, PyObject *args)
 {
     PyObject* o;
     if (!PyArg_ParseTuple(args, "O",&o))
@@ -1301,7 +1364,7 @@ PyObject *SelectionSingleton::sAddSelObserver(PyObject * /*self*/, PyObject *arg
     } PY_CATCH;
 }
 
-PyObject *SelectionSingleton::sRemSelObserver(PyObject * /*self*/, PyObject *args, PyObject * /*kwd*/)
+PyObject *SelectionSingleton::sRemSelObserver(PyObject * /*self*/, PyObject *args)
 {
     PyObject* o;
     if (!PyArg_ParseTuple(args, "O",&o))
@@ -1312,7 +1375,7 @@ PyObject *SelectionSingleton::sRemSelObserver(PyObject * /*self*/, PyObject *arg
     } PY_CATCH;
 }
 
-PyObject *SelectionSingleton::sAddSelectionGate(PyObject * /*self*/, PyObject *args, PyObject * /*kwd*/)
+PyObject *SelectionSingleton::sAddSelectionGate(PyObject * /*self*/, PyObject *args)
 {
     char* filter;
     if (PyArg_ParseTuple(args, "s",&filter)) {
@@ -1344,7 +1407,7 @@ PyObject *SelectionSingleton::sAddSelectionGate(PyObject * /*self*/, PyObject *a
     return 0;
 }
 
-PyObject *SelectionSingleton::sRemoveSelectionGate(PyObject * /*self*/, PyObject *args, PyObject * /*kwd*/)
+PyObject *SelectionSingleton::sRemoveSelectionGate(PyObject * /*self*/, PyObject *args)
 {
     if (!PyArg_ParseTuple(args, ""))
         return NULL;

@@ -75,14 +75,16 @@ MODALT = MODS[Draft.getParam("modalt",2)]
 
 def msg(text=None,mode=None):
     "prints the given message on the FreeCAD status bar"
-    if not text: FreeCAD.Console.PrintMessage("")
-    else:
-        if mode == 'warning':
-            FreeCAD.Console.PrintWarning(text)
-        elif mode == 'error':
-            FreeCAD.Console.PrintError(text)
+    if FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Draft").GetBool("Verbose",True):
+        if not text: 
+            FreeCAD.Console.PrintMessage("")
         else:
-            FreeCAD.Console.PrintMessage(text)
+            if mode == 'warning':
+                FreeCAD.Console.PrintWarning(text)
+            elif mode == 'error':
+                FreeCAD.Console.PrintError(text)
+            else:
+                FreeCAD.Console.PrintMessage(text)
 
 def formatUnit(exp,unit="mm"):
     '''returns a formatting string to set a number to the correct unit'''
@@ -383,6 +385,11 @@ class SelectPlane(DraftTool):
                             self.display(plane.axis)
                             self.finish()
                             return
+                        elif sel.SubElementNames[0] == "Plane":
+                            plane.setFromPlacement(sel.Object.Placement,rebase=True)
+                            self.display(plane.axis)
+                            self.finish()
+                            return
                     elif len(sel.SubElementNames) == 3:
                         if ("Vertex" in sel.SubElementNames[0]) \
                         and ("Vertex" in sel.SubElementNames[1]) \
@@ -391,6 +398,13 @@ class SelectPlane(DraftTool):
                                                  sel.SubObjects[1].Point,
                                                  sel.SubObjects[2].Point,
                                                  self.offset)
+                            self.display(plane.axis)
+                            self.finish()
+                            return
+                elif sel.Object.isDerivedFrom("Part::Feature"):
+                    if sel.Object.Shape:
+                        if len(sel.Object.Shape.Faces) == 1:
+                            plane.alignToFace(sel.Object.Shape.Faces[0], self.offset)
                             self.display(plane.axis)
                             self.finish()
                             return
@@ -591,9 +605,12 @@ class Line(Creator):
                 # building command string
                 rot,sup,pts,fil = self.getStrings()
                 FreeCADGui.addModule("Draft")
-                self.commit(translate("draft","Create DWire"),
-                            ['points='+pts,
-                             'line = Draft.makeWire(points,closed='+str(closed)+',face='+fil+',support='+sup+')',
+                self.commit(translate("draft","Create Wire"),
+                            ['pl = FreeCAD.Placement()',
+                             'pl.Rotation.Q = '+rot,
+                             'pl.Base = '+DraftVecUtils.toString(self.node[0]),
+                             'points = '+pts,
+                             'line = Draft.makeWire(points,placement=pl,closed='+str(closed)+',face='+fil+',support='+sup+')',
                              'Draft.autogroup(line)'])
         Creator.finish(self)
         if self.ui:
@@ -1805,7 +1822,9 @@ class Text(Creator):
                 tx += ','
             if sys.version_info.major < 3:
                 l = unicode(l)
-            tx += '"'+str(l.encode("utf8"))+'"' #Python3 no more unicode
+                tx += '"'+str(l.encode("utf8"))+'"'
+            else:
+                tx += '"'+l+'"' #Python3 no more unicode
         tx += ']'
         FreeCADGui.addModule("Draft")
         self.commit(translate("draft","Create Text"),
@@ -4073,6 +4092,11 @@ class Edit(Modifier):
                 # commented out the following line to disable updating
                 # the object during edit, otherwise it confuses the snapper
                 #self.update(self.trackers[self.editing].get())
+            if hasattr(self.obj.ViewObject,"Selectable"):
+                if self.ui.addButton.isChecked():
+                    self.obj.ViewObject.Selectable = True
+                else:
+                    self.obj.ViewObject.Selectable = False
             redraw3DView()
         elif arg["Type"] == "SoMouseButtonEvent":
             if (arg["State"] == "DOWN") and (arg["Button"] == "BUTTON1"):
@@ -4084,8 +4108,11 @@ class Edit(Modifier):
                         if info["Object"] == self.obj.Name:
                             if self.ui.addButton.isChecked():
                                 if self.point:
-                                    self.pos = arg["Position"]
-                                    self.addPoint(self.point,info)
+                                    pt = self.point
+                                    if "x" in info:
+                                        # prefer "real" 3D location over working-plane-driven one if possible
+                                        pt = FreeCAD.Vector(info["x"],info["y"],info["z"])
+                                    self.addPoint(pt,info)
                             elif self.ui.delButton.isChecked():
                                 if 'EditNode' in info["Component"]:
                                     self.delPoint(int(info["Component"][8:]))
