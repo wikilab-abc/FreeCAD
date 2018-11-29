@@ -1,6 +1,5 @@
 # ***************************************************************************
-# *                                                                         *
-# *   Copyright (c) 2017 - Markus Hovorka <m.hovorka@live.de>               *
+# *   Copyright (c) 2017 Markus Hovorka <m.hovorka@live.de>                 *
 # *                                                                         *
 # *   This program is free software; you can redistribute it and/or modify  *
 # *   it under the terms of the GNU Lesser General Public License (LGPL)    *
@@ -20,11 +19,12 @@
 # *                                                                         *
 # ***************************************************************************
 
-
-__title__ = "FemWriterElmer"
+__title__ = "FreeCAD FEM solver Elmer writer"
 __author__ = "Markus Hovorka"
 __url__ = "http://www.freecadweb.org"
 
+## \addtogroup FEM
+#  @{
 
 import os
 import os.path
@@ -308,8 +308,8 @@ class Writer(object):
         if activeIn:
             self._handleElectrostaticConstants()
             self._handleElectrostaticBndConditions()
-            #self._handleElectrostaticInitial(activeIn)
-            #self._handleElectrostaticBodyForces(activeIn)
+            # self._handleElectrostaticInitial(activeIn)
+            # self._handleElectrostaticBodyForces(activeIn)
             self._handleElectrostaticMaterial(activeIn)
 
     def _getElectrostaticSolver(self, equation):
@@ -319,7 +319,7 @@ class Writer(object):
         s["Variable"] = self._getUniqueVarName("Potential")
         s["Variable DOFs"] = 1
         s["Calculate Electric Field"] = equation.CalculateElectricField
-        #s["Calculate Electric Flux"] = equation.CalculateElectricFlux
+        # s["Calculate Electric Flux"] = equation.CalculateElectricFlux
         s["Calculate Electric Energy"] = equation.CalculateElectricEnergy
         s["Calculate Surface Charge"] = equation.CalculateSurfaceCharge
         s["Displace mesh"] = False
@@ -552,15 +552,15 @@ class Writer(object):
             self._handleFlowConstants()
             self._handleFlowBndConditions()
             self._handleFlowInitialVelocity(activeIn)
-            #self._handleFlowInitial(activeIn)
-            #self._handleFlowBodyForces(activeIn)
+            # self._handleFlowInitial(activeIn)
+            # self._handleFlowBodyForces(activeIn)
             self._handleFlowMaterial(activeIn)
             self._handleFlowEquation(activeIn)
 
     def _getFlowSolver(self, equation):
         s = self._createNonlinearSolver(equation)
         s["Equation"] = "Navier-Stokes"
-        #s["Equation"] = equation.Name
+        # s["Equation"] = equation.Name
         s["Procedure"] = sifio.FileAttr("FlowSolve/FlowSolver")
         s["Exec Solver"] = "Always"
         s["Stabilize"] = equation.Stabilize
@@ -781,3 +781,5 @@ class Writer(object):
 
 class WriteError(Exception):
     pass
+
+##  @}

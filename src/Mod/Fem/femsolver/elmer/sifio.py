@@ -1,6 +1,5 @@
 # ***************************************************************************
-# *                                                                         *
-# *   Copyright (c) 2016 - Markus Hovorka <m.hovorka@live.de>               *
+# *   Copyright (c) 2016 Markus Hovorka <m.hovorka@live.de>                 *
 # *                                                                         *
 # *   This program is free software; you can redistribute it and/or modify  *
 # *   it under the terms of the GNU Lesser General Public License (LGPL)    *
@@ -20,6 +19,12 @@
 # *                                                                         *
 # ***************************************************************************
 
+__title__ = "FreeCAD FEM solver Elmer sifio"
+__author__ = "Markus Hovorka"
+__url__ = "http://www.freecadweb.org"
+
+## \addtogroup FEM
+#  @{
 
 import collections
 import six
@@ -435,3 +440,5 @@ class _IdManager(object):
         if section not in self._ids:
             self.setId(section)
         return self._ids[section]
+
+##  @}
