@@ -375,23 +375,27 @@ class BuildingPart:
                     deltap = obj.Placement.Base.sub(self.oldPlacement.Base)
                     if deltap.Length == 0:
                         deltap = None
-                    deltar = self.oldPlacement.Rotation.multiply(obj.Placement.Rotation)
+                    v = FreeCAD.Vector(0,0,1)
+                    deltar = FreeCAD.Rotation(self.oldPlacement.Rotation.multVec(v),obj.Placement.Rotation.multVec(v))
                     #print "Rotation",deltar.Axis,deltar.Angle
                     if deltar.Angle < 0.0001:
                         deltar = None
                     for child in obj.Group:
                         if ((not hasattr(child,"MoveWithHost")) or child.MoveWithHost) and hasattr(child,"Placement"):
                             #print "moving ",child.Label
-                            if deltap:
-                                child.Placement.move(deltap)
                             if deltar:
                                 #child.Placement.Rotation = child.Placement.Rotation.multiply(deltar) - not enough, child must also move
                                 # use shape methods to obtain a correct placement
                                 import Part,math
                                 shape = Part.Shape()
                                 shape.Placement = child.Placement
+                                #print("angle before rotation:",shape.Placement.Rotation.Angle)
+                                #print("rotation angle:",math.degrees(deltar.Angle))
                                 shape.rotate(DraftVecUtils.tup(obj.Placement.Base), DraftVecUtils.tup(deltar.Axis), math.degrees(deltar.Angle))
+                                #print("angle after rotation:",shape.Placement.Rotation.Angle)
                                 child.Placement = shape.Placement
+                            if deltap:
+                                child.Placement.move(deltap)
 
     def execute(self,obj):
 
@@ -600,6 +604,8 @@ class ViewProviderBuildingPart:
                     self.fon.size = fs
                     b = vobj.DisplayOffset.Base
                     self.tra.translation.setValue([b.x+fs/8,b.y,b.z+fs/8])
+                    r = vobj.DisplayOffset.Rotation
+                    self.tra.rotation.setValue(r.Q)
                     if vobj.OriginOffset:
                         self.lco.point.setValues([[b.x-fs,b.y,b.z],[b.x+fs,b.y,b.z],[b.x,b.y-fs,b.z],[b.x,b.y+fs,b.z],[b.x,b.y,b.z-fs],[b.x,b.y,b.z+fs]])
                     else:
@@ -665,8 +671,11 @@ class ViewProviderBuildingPart:
         QtCore.QObject.connect(action1,QtCore.SIGNAL("triggered()"),self.setWorkingPlane)
         menu.addAction(action1)
         action2 = QtGui.QAction(QtGui.QIcon(":/icons/Draft_SelectPlane.svg"),"Write camera position",menu)
-        QtCore.QObject.connect(action1,QtCore.SIGNAL("triggered()"),self.writeCamera)
+        QtCore.QObject.connect(action2,QtCore.SIGNAL("triggered()"),self.writeCamera)
         menu.addAction(action2)
+        action3 = QtGui.QAction(QtGui.QIcon(),"Create group...",menu)
+        QtCore.QObject.connect(action3,QtCore.SIGNAL("triggered()"),self.createGroup)
+        menu.addAction(action3)
 
     def setWorkingPlane(self,restore=False):
 
@@ -706,6 +715,12 @@ class ViewProviderBuildingPart:
                 cdata.append(n.heightAngle.getValue())
                 cdata.append(1.0) # perspective camera
             self.Object.ViewObject.ViewData = cdata
+
+    def createGroup(self):
+        
+        if hasattr(self,"Object"):
+            s = "FreeCAD.ActiveDocument.getObject(\"%s\").newObject(\"App::DocumentObjectGroup\",\"Group\")" % self.Object.Name
+            FreeCADGui.doCommand(s)
 
     def __getstate__(self):
         return None

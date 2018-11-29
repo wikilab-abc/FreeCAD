@@ -1,6 +1,5 @@
 # ***************************************************************************
-# *                                                                         *
-# *   Copyright (c) 2017 - Markus Hovorka <m.hovorka@live.de>               *
+# *   Copyright (c) 2017 Markus Hovorka <m.hovorka@live.de>                 *
 # *                                                                         *
 # *   This program is free software; you can redistribute it and/or modify  *
 # *   it under the terms of the GNU Lesser General Public License (LGPL)    *
@@ -20,11 +19,12 @@
 # *                                                                         *
 # ***************************************************************************
 
-
-__title__ = "FemElmerTasks"
+__title__ = "FreeCAD FEM solver Elmer tasks"
 __author__ = "Markus Hovorka"
 __url__ = "http://www.freecadweb.org"
 
+## \addtogroup FEM
+#  @{
 
 import subprocess
 import os.path
@@ -150,3 +150,5 @@ class Results(run.Results):
             "Fem::FemPostPipeline", self.solver.Name + "Result")
         self.solver.ElmerResult.Label = self.solver.Label + "Result"
         self.analysis.addObject(self.solver.ElmerResult)
+
+##  @}
