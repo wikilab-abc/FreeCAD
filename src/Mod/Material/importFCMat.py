@@ -22,8 +22,7 @@
 
 
 import FreeCAD
-# import Material
-from Material import getMaterialAttributeStructure
+import Material
 import os
 import sys
 if sys.version_info.major >= 3:
@@ -96,7 +95,10 @@ def read(filename):
             if not line[0] in ";#[":
                 k = line.split("=")
                 if len(k) == 2:
-                    d[k[0].strip()] = k[1].strip().decode('utf-8')
+                    v = k[1].strip()
+                    if hasattr(v,"decode"):
+                        v = v.decode('utf-8')
+                    d[k[0].strip()] = v
         l += 1
     return d
 
@@ -105,14 +107,18 @@ def write(filename, dictionary):
     "writes the given dictionary to the given file"
     # sort the data into sections
     contents = []
-    for key in getMaterialAttributeStructure():  # get the mat file structure from material module
-        contents.append({"keyname": key[0]})
-        if key[0] == "Meta":
+    tree = Material.getMaterialAttributeStructure()
+    MatPropDict = tree.getroot()
+    for group in MatPropDict.getchildren():
+        groupName = group.attrib['Name']
+        contents.append({"keyname": groupName})
+        if groupName == "Meta":
             header = contents[-1]
-        elif key[0] == "User defined":
+        elif groupName == "User defined":
             user = contents[-1]
-        for p in key[1]:
-            contents[-1][p] = ""
+        for proper in group.getchildren():
+            properName = proper.attrib['Name']
+            contents[-1][properName] = ""
     for k, i in dictionary.iteritems():
         found = False
         for group in contents:
@@ -145,7 +151,7 @@ def write(filename, dictionary):
             if len(s) > 1:
                 # if the section has no contents, we don't write it
                 f.write("[" + s["keyname"] + "]\n")
-                for k, i in s.iteritems():
+                for k, i in s.items():
                     if (k != "keyname" and i != '') or k == "Name":
                         # use only keys which are not empty and the name even if empty
                         f.write(k + "=" + i.encode('utf-8') + "\n")

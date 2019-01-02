@@ -460,6 +460,7 @@ class ViewProviderBuildingPart:
             vobj.addProperty("App::PropertyString","OverrideUnit","BuildingPart",QT_TRANSLATE_NOOP("App::Property","An optional unit to express levels"))
         if not "DisplayOffset" in pl:
             vobj.addProperty("App::PropertyPlacement","DisplayOffset","BuildingPart",QT_TRANSLATE_NOOP("App::Property","A transformation to apply to the level mark"))
+            vobj.DisplayOffset = FreeCAD.Placement(FreeCAD.Vector(0,0,0),FreeCAD.Rotation(FreeCAD.Vector(1,0,0),90))
         if not "ShowLevel" in pl:
             vobj.addProperty("App::PropertyBool","ShowLevel","BuildingPart",QT_TRANSLATE_NOOP("App::Property","If true, show the level"))
             vobj.ShowLevel = True
@@ -485,6 +486,8 @@ class ViewProviderBuildingPart:
             vobj.addProperty("App::PropertyBool","RestoreView","BuildingPart",QT_TRANSLATE_NOOP("App::Property","If set, the view stored in this object will be restored on double-click"))
         if not "DiffuseColor" in pl:
             vobj.addProperty("App::PropertyColorList","DiffuseColor","BuildingPart",QT_TRANSLATE_NOOP("App::Property","The individual face colors"))
+        if not "AutoWorkingPlane" in pl:
+            vobj.addProperty("App::PropertyBool","AutoWorkingPlane","BuildingPart",QT_TRANSLATE_NOOP("App::Property","If set to True, the working plane will be kept on Auto mode"))
 
 
     def onDocumentRestored(self,vobj):
@@ -505,7 +508,7 @@ class ViewProviderBuildingPart:
 
         self.Object = vobj.Object
         from pivy import coin
-        self.sep = coin.SoSeparator()
+        self.sep = coin.SoGroup()
         self.mat = coin.SoMaterial()
         self.sep.addChild(self.mat)
         self.dst = coin.SoDrawStyle()
@@ -524,7 +527,7 @@ class ViewProviderBuildingPart:
         self.txt.justification = coin.SoText2.LEFT
         self.txt.string.setValue("level")
         self.sep.addChild(self.txt)
-        vobj.addDisplayMode(coin.SoSeparator(),"Default")
+        vobj.addDisplayMode(self.sep,"Default")
         self.onChanged(vobj,"ShapeColor")
         self.onChanged(vobj,"FontName")
         self.onChanged(vobj,"ShowLevel")
@@ -554,6 +557,8 @@ class ViewProviderBuildingPart:
                 if len(colors) == len(obj.Shape.Faces):
                     if colors != obj.ViewObject.DiffuseColor:
                         obj.ViewObject.DiffuseColor = colors
+        elif prop == "Label":
+            self.onChanged(obj.ViewObject,"ShowLabel")
 
     def getColors(self,obj):
 
@@ -610,18 +615,8 @@ class ViewProviderBuildingPart:
                         self.lco.point.setValues([[b.x-fs,b.y,b.z],[b.x+fs,b.y,b.z],[b.x,b.y-fs,b.z],[b.x,b.y+fs,b.z],[b.x,b.y,b.z-fs],[b.x,b.y,b.z+fs]])
                     else:
                         self.lco.point.setValues([[-fs,0,0],[fs,0,0],[0,-fs,0],[0,fs,0],[0,0,-fs],[0,0,fs]])
-        elif prop in ["ShowLevel","ShowLabel"]:
-            if hasattr(vobj,"ShowLevel") and hasattr(vobj,"ShowLabel"):
-                rn = vobj.RootNode
-                if vobj.ShowLevel or vobj.ShowLabel:
-                    if rn.findChild(self.sep) == -1:
-                        rn.addChild(self.sep)
-                    self.onChanged(vobj,"ShowUnit")
-                else:
-                    if rn.findChild(self.sep) != -1:
-                        rn.removeChild(self.sep)
-        elif prop in ["OverrideUnit","ShowUnit"]:
-            if hasattr(vobj,"OverrideUnit") and hasattr(vobj,"ShowUnit"):
+        elif prop in ["OverrideUnit","ShowUnit","ShowLevel","ShowLabel"]:
+            if hasattr(vobj,"OverrideUnit") and hasattr(vobj,"ShowUnit") and hasattr(vobj,"ShowLevel") and hasattr(vobj,"ShowLabel"):
                 z = vobj.Object.Placement.Base.z + vobj.Object.LevelOffset.Value
                 q = FreeCAD.Units.Quantity(z,FreeCAD.Units.Length)
                 txt = ""
@@ -631,7 +626,7 @@ class ViewProviderBuildingPart:
                     if txt:
                         txt += " "
                     if z >= 0:
-                        txt = "+"
+                        txt += "+"
                     if vobj.OverrideUnit:
                         u = vobj.OverrideUnit
                     else:
@@ -642,6 +637,8 @@ class ViewProviderBuildingPart:
                     if not vobj.ShowUnit:
                         u = ""
                     txt += fmt.format(float(q)) + str(u)
+                if not txt:
+                    txt = " " # empty texts make coin crash...
                 if isinstance(txt,unicode):
                     txt = txt.encode("utf8")
                 self.txt.string.setValue(txt)
@@ -685,8 +682,7 @@ class ViewProviderBuildingPart:
                 FreeCAD.DraftWorkingPlane.restore()
             else:
                 FreeCAD.DraftWorkingPlane.save()
-                FreeCAD.DraftWorkingPlane.setFromPlacement(self.Object.Placement,rebase=True)
-                FreeCAD.DraftWorkingPlane.weak = False
+                FreeCADGui.runCommand("Draft_SelectPlane")
             if hasattr(FreeCADGui,"Snapper"):
                 FreeCADGui.Snapper.setGrid()
             if hasattr(FreeCADGui,"draftToolBar"):
