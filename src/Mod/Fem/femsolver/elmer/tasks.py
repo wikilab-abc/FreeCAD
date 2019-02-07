@@ -45,8 +45,8 @@ class Check(run.Check):
         self.checkEquations()
 
     def checkMeshType(self):
-        mesh = FemUtils.getSingleMember(self.analysis, "Fem::FemMeshObject")
-        if not FemUtils.isOfType(mesh, "Fem::FemMeshGmsh"):
+        mesh = FemUtils.get_single_member(self.analysis, "Fem::FemMeshObject")
+        if not FemUtils.is_of_type(mesh, "Fem::FemMeshGmsh"):
             self.report.error(
                 "Unsupported type of mesh. "
                 "Mesh must be created with gmsh.")
@@ -84,7 +84,7 @@ class Prepare(run.Prepare):
 
     def checkHandled(self, w):
         handled = w.getHandledConstraints()
-        allConstraints = FemUtils.getMember(self.analysis, "Fem::Constraint")
+        allConstraints = FemUtils.get_member(self.analysis, "Fem::Constraint")
         for obj in set(allConstraints) - handled:
             self.report.warning("Ignored constraint %s." % obj.Label)
 
@@ -109,23 +109,10 @@ class Solve(run.Solve):
             self.report.error("ElmerSolver executable not found.")
             self.fail()
 
-    def _observeSolver(self, process):
-        output = ""
-        line = process.stdout.readline()
-        self.pushStatus(line)
-        output += line
-        line = process.stdout.readline()
-        while line:
-            line = "\n%s" % line.rstrip()
-            self.pushStatus(line)
-            output += line
-            line = process.stdout.readline()
-        return output
-
     def _updateOutput(self, output):
         if self.solver.ElmerOutput is None:
             self._createOutput()
-        self.solver.ElmerOutput.Text = output
+        self.solver.ElmerOutput.Text = output.decode("utf-8")
 
     def _createOutput(self):
         self.solver.ElmerOutput = self.analysis.Document.addObject(

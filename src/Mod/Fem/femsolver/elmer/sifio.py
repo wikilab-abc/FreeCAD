@@ -262,7 +262,7 @@ class Section(object):
     def __iter__(self):
         return self._attrs.items()
 
-    def iterkeys(self):
+    def keys(self):
         return self._attrs.keys()
 
     def __contains__(self, item):
@@ -310,7 +310,7 @@ class _Writer(object):
         self._stream.write(_SECTION_DELIM)
 
     def _writeSectionBody(self, s):
-        for key in sorted(s.iterkeys()):  # def iterkeys() from class sifio.Section is called
+        for key in sorted(s.keys()):  # def keys() from class sifio.Section is called
             self._writeAttribute(key, s[key])
 
     def _writeAttribute(self, key, data):
