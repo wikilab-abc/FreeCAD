@@ -200,7 +200,7 @@ void DlgPreferencesImp::activateGroupPage(const QString& group, int index)
 void DlgPreferencesImp::accept()
 {
     this->invalidParameter = false;
-    applyChanges();
+    //applyChanges();
     if (!this->invalidParameter)
         QDialog::accept();
 }
@@ -247,6 +247,7 @@ void DlgPreferencesImp::restoreDefaults()
 
 void DlgPreferencesImp::applyChanges()
 {
+    /*
     try {
         for (int i=0; i<ui->tabWidgetStack->count(); i++) {
             QTabWidget* tabWidget = (QTabWidget*)ui->tabWidgetStack->widget(i);
@@ -286,6 +287,7 @@ void DlgPreferencesImp::applyChanges()
         ParameterManager* parmgr = App::GetApplication().GetParameterSet("User parameter");
         parmgr->SaveDocument(App::Application::Config()["UserParameter"].c_str());
     }
+    */
 }
 
 void DlgPreferencesImp::showEvent(QShowEvent* ev)

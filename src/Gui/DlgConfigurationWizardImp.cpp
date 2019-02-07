@@ -9,6 +9,8 @@
 # include <QTextStream>
 #endif
 
+#include <Base/UnitsApi.h>
+
 #include "DlgGeneralImp.h"
 #include "Action.h"
 #include "Application.h"
@@ -22,6 +24,7 @@
 
 
 using namespace Gui::Dialog;
+using namespace Base;
 
 DlgConfigurationWizardImp::DlgConfigurationWizardImp(QWidget* parent, Qt::WindowFlags fl)
     : QDialog(parent, fl), ui(new Ui_DlgConfigurationWizard)
@@ -75,7 +78,7 @@ DlgConfigurationWizardImp::~DlgConfigurationWizardImp()
 
 void DlgConfigurationWizardImp::configure()
 {
-    //setRecentFileSize();
+    // configure Language
     ParameterGrp::handle hGrp = WindowParameter::getDefaultParameter()->GetGroup("General");
     QString lang = QLocale::languageToString(QLocale::system().language());
     QByteArray language = hGrp->GetASCII("Language", (const char*)lang.toLatin1()).c_str();
@@ -85,6 +88,17 @@ void DlgConfigurationWizardImp::configure()
         hGrp->SetASCII("Language", current.constData());
         Translator::instance()->activateLanguage(current.constData());
     }
+
+    // configure View System
+    int viewSystemIndex;
+    viewSystemIndex = ui->comboBox_ViewSystem->currentIndex();
+    hGrp = App::GetApplication().GetParameterGroupByPath
+        ("User parameter:BaseApp/Preferences/Units");
+    hGrp->SetInt("UserSchema", viewSystemIndex);
+    UnitsApi::setSchema((UnitSystem)viewSystemIndex);
+    
+
+    // configure Navigation Style
 
     close();
 }
